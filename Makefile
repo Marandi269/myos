@@ -1,0 +1,63 @@
+# MyOS Makefile
+# 64-bit kernel for x86_64
+
+# 使用系统 gcc (带 -m64)
+CC = gcc
+AS = gcc
+LD = ld
+
+# 编译选项
+CFLAGS = -m64 -ffreestanding -mno-red-zone -mno-mmx -mno-sse -mno-sse2 \
+         -fno-stack-protector -fno-pic -fno-pie \
+         -Wall -Wextra -O2 -Iinclude -Ikernel
+
+ASFLAGS = -m64
+
+LDFLAGS = -T linker.ld -nostdlib -z max-page-size=0x1000
+
+# 源文件
+ASM_SRCS = kernel/boot.S
+C_SRCS = kernel/main.c kernel/serial.c kernel/idt.c kernel/pic.c kernel/keyboard.c
+
+# 目标文件
+ASM_OBJS = $(ASM_SRCS:.S=.o)
+C_OBJS = $(C_SRCS:.c=.o)
+OBJS = $(ASM_OBJS) $(C_OBJS)
+
+# 目标
+.PHONY: all clean run debug
+
+all: myos.iso
+
+kernel.bin: $(OBJS)
+	$(LD) $(LDFLAGS) -o $@ $^
+
+myos.iso: kernel.bin grub.cfg
+	@mkdir -p iso/boot/grub
+	cp kernel.bin iso/boot/
+	cp grub.cfg iso/boot/grub/
+	grub-mkrescue -o $@ iso 2>/dev/null
+
+# 汇编文件编译
+kernel/boot.o: kernel/boot.S
+	$(AS) $(ASFLAGS) -c $< -o $@
+
+# C 文件编译
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: myos.iso
+	./scripts/run.sh
+
+debug: myos.iso
+	./scripts/debug.sh
+
+clean:
+	rm -rf $(OBJS) kernel.bin myos.iso iso/
+
+# 依赖关系
+kernel/main.o: kernel/main.c include/types.h kernel/serial.h kernel/idt.h kernel/pic.h kernel/keyboard.h
+kernel/serial.o: kernel/serial.c include/types.h kernel/serial.h
+kernel/idt.o: kernel/idt.c include/types.h kernel/idt.h kernel/serial.h
+kernel/pic.o: kernel/pic.c include/types.h kernel/pic.h kernel/serial.h
+kernel/keyboard.o: kernel/keyboard.c include/types.h kernel/keyboard.h kernel/pic.h kernel/serial.h

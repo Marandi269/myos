@@ -1,0 +1,30 @@
+# 编译产物
+*.o
+*.bin
+*.iso
+*.elf
+
+# 构建目录
+iso/
+build/
+obj/
+
+# 编辑器和IDE
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-*
+
+# 调试文件
+*.log
+core
+core.*
+
+# macOS
+.DS_Store
+
+# 备份文件
+*.bak
+*.orig
