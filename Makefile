@@ -20,6 +20,7 @@ ASM_SRCS = kernel/boot.S \
            kernel/proc/switch.S \
            kernel/proc/gdt_asm.S \
            kernel/proc/syscall_asm.S \
+           kernel/proc/ap_trampoline.S \
            kernel/fs/initramfs_data.S
 
 C_SRCS = kernel/main.c \
@@ -37,6 +38,8 @@ C_SRCS = kernel/main.c \
          kernel/drivers/pci.c \
          kernel/drivers/virtio.c \
          kernel/drivers/virtio_net.c \
+         kernel/drivers/apic.c \
+         kernel/drivers/tty.c \
          kernel/proc/process.c \
          kernel/proc/scheduler.c \
          kernel/proc/gdt.c \
@@ -47,6 +50,9 @@ C_SRCS = kernel/main.c \
          kernel/proc/elf.c \
          kernel/proc/clone.c \
          kernel/proc/futex.c \
+         kernel/proc/smp.c \
+         kernel/proc/dynlink.c \
+         kernel/lib/spinlock.c \
          kernel/fs/vfs.c \
          kernel/fs/fd.c \
          kernel/fs/stdio.c \
@@ -66,7 +72,10 @@ C_SRCS = kernel/main.c \
          kernel/net/tcp.c \
          kernel/net/socket.c \
          kernel/net/dhcp.c \
-         kernel/net/net.c
+         kernel/net/net.c \
+         kernel/drivers/usb/usb.c \
+         kernel/drivers/usb/xhci.c \
+         kernel/drivers/usb/hid.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)
@@ -109,6 +118,9 @@ kernel/proc/gdt_asm.o: kernel/proc/gdt_asm.S
 	$(AS) $(ASFLAGS) -c $< -o $@
 
 kernel/proc/syscall_asm.o: kernel/proc/syscall_asm.S
+	$(AS) $(ASFLAGS) -c $< -o $@
+
+kernel/proc/ap_trampoline.o: kernel/proc/ap_trampoline.S
 	$(AS) $(ASFLAGS) -c $< -o $@
 
 kernel/fs/initramfs_data.o: kernel/fs/initramfs_data.S

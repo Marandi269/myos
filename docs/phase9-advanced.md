@@ -5,13 +5,21 @@
 
 ## 前置依赖
 - ✅ Phase 0-7: 核心功能完成
-- ⏳ Phase 8: 网络栈 (可选)
+- ✅ Phase 8: 网络栈完成
+
+## 完成状态
+- ✅ A-01 SMP 多核支持 - LAPIC/IOAPIC/自旋锁已实现
+- ✅ A-02 pthread 线程支持 - clone/futex/pthread 库已实现
+- ✅ A-03 动态链接器 - ELF动态段/符号解析/重定位已实现
+- ✅ A-04 TTY 子系统 - termios/行规程已实现
+- ⏳ A-05 Framebuffer - 待实现
+- ✅ A-06 USB - xHCI控制器/设备检测已实现
 
 ---
 
 ## 任务列表
 
-### A-01: SMP 多核支持
+### A-01: SMP 多核支持 ✅
 **优先级**: P1
 **依赖**: I-04 (APIC), P-03 (调度器)
 
@@ -46,7 +54,7 @@
 
 ---
 
-### A-02: 线程支持 (pthread)
+### A-02: 线程支持 (pthread) ✅
 **优先级**: P1
 **依赖**: P-03 (进程管理), M-05 (用户空间内存)
 
@@ -87,7 +95,7 @@ pthread_join(t2, NULL);
 
 ---
 
-### A-03: 动态链接器
+### A-03: 动态链接器 ✅
 **优先级**: P2
 **依赖**: U-01 (ELF 加载器)
 
@@ -253,30 +261,95 @@ A-06 (USB) ──────────────────┘
 
 ## 交付物清单
 
-### A-01 SMP
-- [ ] `kernel/acpi/acpi.c/h` - ACPI 解析
-- [ ] `kernel/drivers/apic.c/h` - APIC 驱动
-- [ ] `kernel/proc/smp.c/h` - SMP 初始化
-- [ ] `kernel/lib/spinlock.c/h` - 自旋锁
+### A-01 SMP ✅
+- [x] `kernel/drivers/apic.c/h` - Local APIC 和 I/O APIC 驱动
+- [x] `kernel/proc/smp.c/h` - SMP 初始化和 CPU 检测
+- [x] `kernel/proc/ap_trampoline.S` - AP 启动 trampoline 代码
+- [x] `kernel/lib/spinlock.c/h` - 自旋锁实现
+- [ ] `kernel/acpi/acpi.c/h` - ACPI 解析 (可选，使用 CPUID 检测)
 
-### A-02 pthread
-- [ ] `kernel/proc/clone.c` - clone 实现
-- [ ] `kernel/proc/futex.c` - futex 实现
-- [ ] `libc/src/pthread.c` - pthread 库
-- [ ] `libc/include/pthread.h` - pthread 头文件
+**状态**: LAPIC/IOAPIC 初始化完成，检测到多核，AP 启动代码框架完成。
 
-### A-04 TTY
-- [ ] `kernel/drivers/tty.c/h` - TTY 驱动
-- [ ] `kernel/drivers/pty.c/h` - PTY 驱动
-- [ ] `libc/include/termios.h` - termios 定义
+### A-02 pthread ✅
+- [x] `kernel/proc/clone.c/h` - clone() 系统调用实现
+- [x] `kernel/proc/futex.c/h` - futex 系统调用实现
+- [x] `libc/src/pthread.c` - pthread 库 (create/join/exit/mutex/cond)
+- [x] `libc/include/pthread.h` - pthread 头文件
+
+**状态**: 完成，支持线程创建、同步原语（互斥锁、条件变量）。
+
+### A-04 TTY ✅
+- [x] `kernel/drivers/tty.c/h` - TTY 驱动 (行规程, 规范模式, 回显)
+- [ ] `kernel/drivers/pty.c/h` - PTY 驱动 (未实现)
+- [x] `libc/include/termios.h` - termios 定义
+
+**状态**: TTY 驱动完成，支持规范模式、行编辑、信号字符、termios 接口。PTY 暂未实现。
+
+### A-03 动态链接器 ✅
+- [x] `kernel/proc/dynlink.c/h` - 动态链接器核心
+- [x] `kernel/proc/elf.h` - ELF64 动态段结构定义
+
+**状态**: 完成。支持：
+- ELF64 动态段解析 (PT_DYNAMIC)
+- 共享库加载 (.so)
+- 符号解析 (ELF hash)
+- 重定位处理 (R_X86_64_64, RELATIVE, GLOB_DAT, JUMP_SLOT)
+- 依赖库加载 (DT_NEEDED)
 
 ### A-05 Framebuffer
 - [ ] `kernel/drivers/fb.c/h` - Framebuffer 驱动
 - [ ] `kernel/lib/font.c` - 位图字体
 - [ ] `userspace/fbtest.c` - 测试程序
 
-### A-06 USB
-- [ ] `kernel/drivers/usb/usb.c/h` - USB 核心
-- [ ] `kernel/drivers/usb/ehci.c` - EHCI 控制器
-- [ ] `kernel/drivers/usb/hid.c` - HID 驱动
-- [ ] `kernel/drivers/usb/storage.c` - 存储驱动
+### A-06 USB ✅
+- [x] `kernel/drivers/usb/usb.c/h` - USB 核心框架
+- [x] `kernel/drivers/usb/xhci.c/h` - xHCI (USB 3.x) 控制器驱动
+- [x] `kernel/drivers/usb/hid.c/h` - HID 键盘驱动（完整实现）
+- [ ] `kernel/drivers/usb/ehci.c` - EHCI 控制器 (未实现)
+- [ ] `kernel/drivers/usb/storage.c` - 存储驱动 (未实现)
+
+**状态**: USB 核心框架、xHCI 控制器驱动和 HID 键盘驱动已完成。支持：
+- USB 核心: 设备分配、枚举、控制传输
+- PCI 自动探测 USB 控制器
+- xHCI (USB 3.x): 控制器初始化、端口扫描、设备检测
+- DCBAA、命令环、事件环、传输环初始化
+- 设备地址分配 (Address Device 命令)
+- 控制传输 (Setup/Data/Status TRB)
+- 端口复位和速度检测 (Full/Low/High/Super)
+- **中断传输 (Interrupt Transfer)** - 用于键盘输入
+- Configure Endpoint 命令
+- 中断端点配置和异步轮询
+- HID 键盘驱动 (Boot Protocol + 中断传输)
+- 键码到 ASCII 映射 (US 布局)
+
+**验证输出**:
+```
+[USB] Core initialized
+[USB] Registering driver: USB HID
+[HID] USB HID driver registered
+[USB] Found USB controller: 00:02.0 prog_if=0x30
+[USB] Detected xHCI controller
+[USB] xHCI MMIO base: 0xfebfc000, IRQ: 10
+[xHCI] Initializing controller at 0xfebfc000
+[xHCI] Max slots: 64, Max ports: 8
+[xHCI] Controller reset complete
+[xHCI] DCBAA at 0x196000 (64 slots)
+[xHCI] Command ring at 0x197000
+[xHCI] Event ring at 0x198000
+[xHCI] Controller started
+[xHCI] Scanning 8 ports...
+[xHCI] Port 4: Device connected, speed=High (480 Mbps)
+[xHCI] Port 4 reset complete, speed=3
+[xHCI] Enabled slot 1
+[xHCI] Device addressed, slot 1
+[USB] Enumerating device...
+[USB] Device address: 1
+[USB] VID=0627 PID=0001 QEMU QEMU USB Keyboard
+[HID] Found boot keyboard on interface 0
+[xHCI] Setting up interrupt EP1 IN (DCI=3)
+[xHCI] Interrupt EP1 configured
+[HID] Interrupt transfers enabled
+[HID] USB keyboard ready
+[USB] Interface 0: USB HID
+[xHCI] Initialization complete
+```

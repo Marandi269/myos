@@ -21,6 +21,10 @@
 #include "proc/usermode.h"
 #include "fs/fs.h"
 #include "net/net.h"
+#include "proc/smp.h"
+#include "drivers/tty.h"
+#include "drivers/usb/usb.h"
+#include "drivers/usb/hid.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
@@ -349,6 +353,9 @@ void kernel_main(void) {
     /* Initialize keyboard driver */
     keyboard_init();
 
+    /* Initialize TTY subsystem */
+    tty_init();
+
     /* Initialize filesystem (VFS, ramfs, devfs) */
     fs_init();
 
@@ -370,11 +377,37 @@ void kernel_main(void) {
     test_timer();
     test_syscalls();
 
-    /* Initialize network stack */
+    /* Initialize SMP (detect and start other CPUs) */
+    smp_init();
+
+    /* Start Application Processors if SMP enabled */
+    /* TODO: AP startup needs more work for proper QEMU compatibility */
+    /* if (smp_enabled()) {
+        smp_start_aps();
+    } */
+    kprintf("[SMP] AP startup disabled (BSP only mode)\n");
+
+    /* Initialize network stack (includes PCI init) */
     net_init();
+
+    /* Initialize USB subsystem (needs PCI) */
+    usb_init();
 
     /* Run network test */
     net_test();
+
+    /* Test USB keyboard input */
+    usb_hid_keyboard_t *test_kbd = usb_hid_get_keyboard();
+    if (test_kbd) {
+        kprintf("\n[TEST] USB Keyboard - press keys for 5 seconds:\n> ");
+        for (int i = 0; i < 500; i++) {
+            usb_hid_keyboard_poll(test_kbd);
+            for (volatile int j = 0; j < 50000; j++);  /* ~10ms delay */
+        }
+        kprintf("\n[TEST] USB keyboard test done\n");
+    } else {
+        kprintf("[USB] No USB keyboard found\n");
+    }
 
     /* Scheduler test (will not return once started) */
     test_scheduler();
@@ -392,10 +425,17 @@ void kernel_main(void) {
     test_usermode();
 
     /* If we get here, something went wrong or user process exited */
-    kprintf("\n[Kernel] Ready. Type something:\n");
+    kprintf("\n[Kernel] Ready. Type something (USB keyboard):\n");
 
-    /* Main kernel loop - just wait for interrupts */
+    /* Main kernel loop - poll USB keyboard */
+    usb_hid_keyboard_t *usb_kbd = usb_hid_get_keyboard();
     while (1) {
-        __asm__ volatile ("hlt");
+        /* Poll USB keyboard if available */
+        if (usb_kbd) {
+            usb_hid_keyboard_poll(usb_kbd);
+        }
+
+        /* Small delay */
+        for (volatile int i = 0; i < 100000; i++);
     }
 }

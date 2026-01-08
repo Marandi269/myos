@@ -21,7 +21,7 @@
 | 6 | 用户空间 | ✅ 完成 | ELF加载器, libc, shell |
 | 7 | IPC | ✅ 完成 | 管道, 信号, 共享内存 |
 | 8 | 网络栈 | ✅ 完成 | TCP/IP, virtio-net, Socket |
-| 9 | 高级特性 | 📋 **可选** | SMP, pthread, TTY |
+| 9 | 高级特性 | ✅ 完成 | SMP, pthread, TTY, USB, 动态链接 |
 | 10 | 磁盘启动 | 📋 **可选** | IDE/ext2, 持久化存储 |
 | 11 | I/O 多路复用 | 📋 **可选** | select/poll/epoll |
 

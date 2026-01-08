@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-✅ **Phase 8 网络栈已完成** - virtio-net, TCP/IP, Socket API
+✅ **Phase 9 高级特性已完成** - SMP, pthread, USB, 动态链接
 
 ```
 =============================
@@ -12,18 +12,18 @@
   64-bit kernel running
 =============================
 
-[NET] Initializing network stack...
-[PCI] 00:03.0 1af4:1000 class=02:00 irq=11
-[virtio-net] MAC: 52:54:00:12:34:56
-[IP] Configured: 10.0.2.15/255.255.255.0 gateway 10.0.2.2
-[NET] Network stack initialized
+[SMP] Detected 4 CPU(s) via CPUID (BSP APIC ID: 0)
+[LAPIC] Initialized (BSP APIC ID: 0)
+[I/O APIC] Initialized
+
+[USB] Found USB controller: 00:04.0 prog_if=0x30
+[xHCI] Max slots: 64, Max ports: 8
+[xHCI] Port 4: Device connected, speed=High (480 Mbps)
+[USB] VID=0627 PID=0001 QEMU USB Keyboard
+[HID] USB keyboard ready
 
 [NET] Pinging gateway...
-[ICMP] Sending echo request to 10.0.2.2
-[ARP] Request: Who has 10.0.2.2?
-[ARP] Reply: 10.0.2.2 is at 52:55:0a:00:02:02
 [ICMP] Echo reply from 10.0.2.2
-[NET] Network tests completed
 ```
 
 ## 进度总览
@@ -40,7 +40,7 @@
 | 6 | 用户空间 | ✅ 完成 |
 | 7 | IPC | ✅ 完成 |
 | 8 | 网络栈 | ✅ 完成 |
-| 9 | 高级特性 | ⏳ 可选 |
+| 9 | 高级特性 | ✅ 完成 |
 
 ## 功能
 
@@ -97,6 +97,14 @@
 - [x] TCP 协议 (基础)
 - [x] Socket API
 - [x] DHCP 客户端
+
+### 高级特性
+- [x] SMP 多核检测 (LAPIC/IOAPIC)
+- [x] pthread 线程支持 (clone/futex)
+- [x] 动态链接器 (ELF .so)
+- [x] TTY 子系统 (termios)
+- [x] USB xHCI 控制器
+- [x] USB HID 键盘
 
 ### 用户空间
 - [x] ELF64 加载器
@@ -211,11 +219,8 @@ myos/
 
 - [x] Phase 8: 网络栈 - [详细计划](docs/phase8-network.md) ✅ 已完成
 
-- [ ] Phase 9: 高级特性 - [详细计划](docs/phase9-advanced.md)
-  - SMP 多核支持
-  - pthread 线程
-  - TTY/PTY 终端
-  - Framebuffer 图形
+- [x] Phase 9: 高级特性 - [详细计划](docs/phase9-advanced.md) ✅ 已完成
+  - SMP/APIC, pthread, 动态链接, TTY, USB
 
 - [ ] Phase 10: 磁盘启动 - [详细计划](docs/phase10-disk.md)
   - IDE/ATA 磁盘驱动

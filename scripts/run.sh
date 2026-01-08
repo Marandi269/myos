@@ -17,11 +17,13 @@ fi
 # -display none disables graphical display (headless mode)
 # -netdev user,id=net0 enables user-mode networking
 # -device virtio-net-pci,netdev=net0 adds virtio-net device
+# -smp 4 enables 4 CPUs for SMP testing
 qemu-system-x86_64 \
     -cdrom "$ISO" \
     -serial mon:stdio \
     -display none \
     -m 128M \
+    -smp 4 \
     -no-reboot \
     -no-shutdown \
     -netdev user,id=net0 \
