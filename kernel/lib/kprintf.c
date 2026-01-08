@@ -98,9 +98,12 @@ int kprintf(const char *fmt, ...) {
         }
 
         /* Handle 'l' and 'll' modifiers */
+        int is_long = 0;
         if (c == 'l') {
+            is_long = 1;
             c = *fmt++;
             if (c == 'l') {
+                is_long = 2;  /* long long */
                 c = *fmt++;
             }
         }
@@ -108,22 +111,38 @@ int kprintf(const char *fmt, ...) {
         switch (c) {
             case 'd':
             case 'i':
-                d = va_arg(ap, int64_t);
+                if (is_long) {
+                    d = va_arg(ap, int64_t);
+                } else {
+                    d = va_arg(ap, int);  /* int is promoted in varargs */
+                }
                 print_signed(d, width, pad);
                 break;
 
             case 'u':
-                u = va_arg(ap, uint64_t);
+                if (is_long) {
+                    u = va_arg(ap, uint64_t);
+                } else {
+                    u = va_arg(ap, unsigned int);
+                }
                 print_num(u, 10, width, pad, 0);
                 break;
 
             case 'x':
-                u = va_arg(ap, uint64_t);
+                if (is_long) {
+                    u = va_arg(ap, uint64_t);
+                } else {
+                    u = va_arg(ap, unsigned int);
+                }
                 print_num(u, 16, width, pad, 0);
                 break;
 
             case 'X':
-                u = va_arg(ap, uint64_t);
+                if (is_long) {
+                    u = va_arg(ap, uint64_t);
+                } else {
+                    u = va_arg(ap, unsigned int);
+                }
                 print_num(u, 16, width, pad, 1);
                 break;
 

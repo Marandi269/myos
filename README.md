@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-✅ **Phase 9 高级特性已完成** - SMP, pthread, USB, 动态链接
+✅ **Phase 10 磁盘启动已完成** - IDE/ATA, ext2 读写, 持久化存储
 
 ```
 =============================
@@ -12,18 +12,21 @@
   64-bit kernel running
 =============================
 
-[SMP] Detected 4 CPU(s) via CPUID (BSP APIC ID: 0)
-[LAPIC] Initialized (BSP APIC ID: 0)
-[I/O APIC] Initialized
+[IDE] hda: ATA QEMU HARDDISK, 64 MB
+[IDE] Found 2 drive(s)
 
-[USB] Found USB controller: 00:04.0 prog_if=0x30
-[xHCI] Max slots: 64, Max ports: 8
-[xHCI] Port 4: Device connected, speed=High (480 Mbps)
-[USB] VID=0627 PID=0001 QEMU USB Keyboard
-[HID] USB keyboard ready
+[ext2] Block size: 1024 bytes
+[ext2] Blocks: 64512, Inodes: 16128
+[ext2] Mounted successfully
 
-[NET] Pinging gateway...
-[ICMP] Echo reply from 10.0.2.2
+[DISK] Root directory contents:
+  DIR boot (inode 12)
+  DIR bin (inode 17)
+  DIR etc (inode 18)
+  DIR home (inode 19)
+[DISK] /boot/kernel.bin ELF magic: 7f 45 4c 46
+[DISK] Created /hello.txt
+[ext2] Synced to disk
 ```
 
 ## 进度总览
@@ -41,6 +44,7 @@
 | 7 | IPC | ✅ 完成 |
 | 8 | 网络栈 | ✅ 完成 |
 | 9 | 高级特性 | ✅ 完成 |
+| 10 | 磁盘启动 | ✅ 完成 |
 
 ## 功能
 
@@ -105,6 +109,12 @@
 - [x] TTY 子系统 (termios)
 - [x] USB xHCI 控制器
 - [x] USB HID 键盘
+
+### 磁盘存储
+- [x] IDE/ATA 磁盘驱动 (PIO 模式)
+- [x] ext2 文件系统 (读写支持)
+- [x] 磁盘镜像创建脚本
+- [x] 持久化文件存储
 
 ### 用户空间
 - [x] ELF64 加载器
@@ -222,11 +232,8 @@ myos/
 - [x] Phase 9: 高级特性 - [详细计划](docs/phase9-advanced.md) ✅ 已完成
   - SMP/APIC, pthread, 动态链接, TTY, USB
 
-- [ ] Phase 10: 磁盘启动 - [详细计划](docs/phase10-disk.md)
-  - IDE/ATA 磁盘驱动
-  - ext2 文件系统
-  - 持久化存储
-  - 根文件系统切换
+- [x] Phase 10: 磁盘启动 - [详细计划](docs/phase10-disk.md) ✅ 已完成
+  - IDE/ATA, ext2 读写, 持久化存储
 
 - [ ] Phase 11: I/O 多路复用 - [详细计划](docs/phase11-io-multiplexing.md)
   - 等待队列机制

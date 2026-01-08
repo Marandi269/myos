@@ -437,16 +437,53 @@ qemu-system-x86_64 \
 
 ---
 
+## 当前状态 (2026-01-08)
+
+### 已完成
+- ✅ D-01: `scripts/mkdisk.sh` - 磁盘镜像创建脚本 (支持容器环境)
+- ✅ D-02: `Makefile` 更新 - disk/run-disk 目标
+- ✅ D-03: `kernel/drivers/ide.c/h` - IDE/ATA 磁盘驱动 (PIO模式)
+- ✅ D-05: `kernel/fs/ext2/ext2.c/h` - ext2 文件系统只读支持
+- ✅ D-06: `kernel/fs/ext2/ext2.c` - ext2 写入支持 (create/write/mkdir/unlink/sync)
+
+### 验证结果
+```
+[IDE] hda: ATA QEMU HARDDISK, 64 MB
+[IDE] Found 2 drive(s)
+[TEST] IDE: Read MBR OK (signature 0x55AA found)
+[TEST] First partition starts at LBA 2048
+[ext2] Block size: 1024 bytes
+[ext2] Blocks: 64512, Inodes: 16128
+[ext2] Block groups: 8
+[ext2] Mounted successfully
+[TEST] ext2 root directory:
+  DIR boot (inode 12)
+  DIR bin (inode 17)
+  ...
+[TEST] Found /boot/kernel.bin (inode 14)
+[TEST] Read 16 bytes, ELF magic: 7f 45 4c 46
+[TEST] ext2 write test...
+[TEST] Created /test.txt (inode 24)
+[TEST] Wrote 28 bytes
+[TEST] Read back 28 bytes: 'Hello from MyOS ext2 write!'
+[ext2] Synced to disk
+```
+
+### 待完成
+- ⏳ D-04: virtio-blk 驱动 (可选)
+- ⏳ D-07: 根文件系统切换 (pivot_root)
+
+---
+
 ## 交付物清单
 
-- [ ] `scripts/mkdisk.sh` - 磁盘镜像创建脚本
-- [ ] `Makefile` 更新 - disk/run-disk 目标
-- [ ] `kernel/drivers/ide.c/h` - IDE 驱动
-- [ ] `kernel/drivers/block.c/h` - 块设备抽象
+- [x] `scripts/mkdisk.sh` - 磁盘镜像创建脚本
+- [x] `Makefile` 更新 - disk/run-disk 目标
+- [x] `kernel/drivers/ide.c/h` - IDE 驱动 (含块设备接口)
 - [ ] `kernel/drivers/virtio_blk.c/h` - virtio-blk 驱动 (可选)
-- [ ] `kernel/fs/ext2/ext2.c/h` - ext2 文件系统
+- [x] `kernel/fs/ext2/ext2.c/h` - ext2 文件系统 (读写支持)
 - [ ] `kernel/proc/pivot_root.c` - 根切换
-- [ ] 更新 grub.cfg - 磁盘启动配置
+- [x] 更新 grub.cfg - 磁盘启动配置
 
 ---
 

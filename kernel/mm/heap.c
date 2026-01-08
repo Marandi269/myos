@@ -300,3 +300,21 @@ void heap_print_stats(void) {
     kprintf("  Allocated: %d bytes (%d calls)\n", (int)total_allocated, (int)alloc_count);
     kprintf("  Freed: %d bytes (%d calls)\n", (int)total_freed, (int)free_count);
 }
+
+/* Debug: dump heap blocks near address 0x183000-0x185000 */
+void heap_dump_blocks(void) {
+    struct heap_block *block = heap_start;
+    int i = 0;
+    kprintf("[Heap] Blocks near 0x183000:\n");
+    while (block != NULL && i < 80) {
+        uintptr_t addr = (uintptr_t)block;
+        if (addr >= 0x183000 && addr < 0x185000) {
+            kprintf("  [%d] %p: size=%d free=%d data=[%p-%p]\n",
+                    i, block, block->size, block->free,
+                    (uint8_t*)block + HEADER_SIZE,
+                    (uint8_t*)block + HEADER_SIZE + block->size);
+        }
+        block = block->next;
+        i++;
+    }
+}

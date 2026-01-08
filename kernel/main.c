@@ -25,9 +25,25 @@
 #include "drivers/tty.h"
 #include "drivers/usb/usb.h"
 #include "drivers/usb/hid.h"
+#include "drivers/ide.h"
+#include "fs/ext2/ext2.h"
+#include "fs/pivot_root.h"
+#include "lib/string.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
+
+/* ext2 test callback for readdir */
+static void ext2_test_callback(const char *name, uint32_t ino, uint8_t type) {
+    const char *type_str;
+    switch (type) {
+        case EXT2_FT_DIR:     type_str = "DIR"; break;
+        case EXT2_FT_REG_FILE: type_str = "FILE"; break;
+        case EXT2_FT_SYMLINK: type_str = "LINK"; break;
+        default:              type_str = "?"; break;
+    }
+    kprintf("  %s %s (inode %d)\n", type_str, name, ino);
+}
 
 /* Exception names for debugging */
 static const char *exception_names[] = {
@@ -392,6 +408,59 @@ void kernel_main(void) {
 
     /* Initialize USB subsystem (needs PCI) */
     usb_init();
+
+    /* Initialize IDE disk driver */
+    ide_init();
+
+    /* Test disk boot: mount ext2 and demonstrate root filesystem access */
+    if (ide_device_count() > 0) {
+        kprintf("\n[DISK] Mounting ext2 filesystem...\n");
+
+        /* Mount ext2 directly (skip VFS to avoid heap corruption) */
+        block_device_t *disk = ide_get_device(0);
+        if (disk) {
+            /* Read MBR to get partition start */
+            uint8_t mbr[512];
+            if (disk->read(disk, 0, mbr, 1) > 0 && mbr[510] == 0x55 && mbr[511] == 0xAA) {
+                uint32_t part_start = mbr[0x1BE + 8] | (mbr[0x1BE + 9] << 8) |
+                                      (mbr[0x1BE + 10] << 16) | (mbr[0x1BE + 11] << 24);
+
+                if (ext2_mount(disk, part_start) == 0) {
+                    kprintf("[DISK] ext2 mounted successfully!\n");
+
+                    /* List root directory */
+                    kprintf("[DISK] Root directory contents:\n");
+                    ext2_readdir(EXT2_ROOT_INO, ext2_test_callback);
+
+                    /* Read /boot/kernel.bin */
+                    uint32_t boot_ino, kernel_ino;
+                    if (ext2_lookup(EXT2_ROOT_INO, "boot", &boot_ino) == 0) {
+                        kprintf("[DISK] Found /boot (inode %d)\n", boot_ino);
+
+                        if (ext2_lookup(boot_ino, "kernel.bin", &kernel_ino) == 0) {
+                            uint8_t elf_header[16];
+                            if (ext2_read_file(kernel_ino, elf_header, 0, 16) > 0) {
+                                kprintf("[DISK] /boot/kernel.bin ELF magic: %02x %02x %02x %02x\n",
+                                        elf_header[0], elf_header[1], elf_header[2], elf_header[3]);
+                            }
+                        }
+                    }
+
+                    /* Create a test file */
+                    kprintf("[DISK] Creating test file...\n");
+                    uint32_t test_ino;
+                    if (ext2_create(EXT2_ROOT_INO, "hello.txt", EXT2_S_IFREG | 0644, &test_ino) == 0) {
+                        const char *msg = "Hello from MyOS disk boot!\n";
+                        ext2_write_file(test_ino, msg, 0, strlen(msg));
+                        ext2_sync();
+                        kprintf("[DISK] Created /hello.txt\n");
+                    }
+
+                    kprintf("[DISK] Disk root filesystem ready!\n");
+                }
+            }
+        }
+    }
 
     /* Run network test */
     net_test();

@@ -75,7 +75,10 @@ C_SRCS = kernel/main.c \
          kernel/net/net.c \
          kernel/drivers/usb/usb.c \
          kernel/drivers/usb/xhci.c \
-         kernel/drivers/usb/hid.c
+         kernel/drivers/usb/hid.c \
+         kernel/drivers/ide.c \
+         kernel/fs/ext2/ext2.c \
+         kernel/fs/pivot_root.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)
@@ -83,7 +86,7 @@ C_OBJS = $(C_SRCS:.c=.o)
 OBJS = $(ASM_OBJS) $(C_OBJS)
 
 # 目标
-.PHONY: all clean run debug userspace initramfs
+.PHONY: all clean run debug userspace initramfs disk run-disk run-disk-virtio debug-disk
 
 all: myos.iso
 
@@ -136,8 +139,39 @@ run: myos.iso
 debug: myos.iso
 	./scripts/debug.sh
 
+# Disk image creation
+disk: kernel.bin
+	@if [ -f initramfs.cpio ]; then \
+		./scripts/mkdisk.sh; \
+	else \
+		echo "Warning: initramfs.cpio not found, creating without it"; \
+		./scripts/mkdisk.sh; \
+	fi
+
+# Run from disk image (IDE)
+run-disk: disk
+	qemu-system-x86_64 \
+		-drive file=myos.img,format=raw,if=ide \
+		-nographic \
+		-no-reboot
+
+# Run from disk image (virtio - better performance)
+run-disk-virtio: disk
+	qemu-system-x86_64 \
+		-drive file=myos.img,format=raw,if=virtio \
+		-nographic \
+		-no-reboot
+
+# Debug with disk image
+debug-disk: disk
+	qemu-system-x86_64 \
+		-drive file=myos.img,format=raw,if=ide \
+		-nographic \
+		-no-reboot \
+		-s -S
+
 clean:
-	rm -rf $(OBJS) kernel.bin myos.iso iso/ initramfs.cpio
+	rm -rf $(OBJS) kernel.bin myos.iso iso/ initramfs.cpio myos.img
 	find kernel -name "*.o" -delete
 	$(MAKE) -C userspace clean 2>/dev/null || true
 	$(MAKE) -C libc clean 2>/dev/null || true

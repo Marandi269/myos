@@ -25,4 +25,7 @@ void *kzalloc(size_t size);
 /* Print heap statistics */
 void heap_print_stats(void);
 
+/* Debug: dump heap blocks */
+void heap_dump_blocks(void);
+
 #endif /* _HEAP_H */
