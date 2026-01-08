@@ -17,7 +17,9 @@ LDFLAGS = -T linker.ld -nostdlib -z max-page-size=0x1000
 
 # 源文件
 ASM_SRCS = kernel/boot.S \
-           kernel/proc/switch.S
+           kernel/proc/switch.S \
+           kernel/proc/gdt_asm.S \
+           kernel/proc/syscall_asm.S
 
 C_SRCS = kernel/main.c \
          kernel/serial.c \
@@ -32,7 +34,10 @@ C_SRCS = kernel/main.c \
          kernel/mm/page_fault.c \
          kernel/drivers/pit.c \
          kernel/proc/process.c \
-         kernel/proc/scheduler.c
+         kernel/proc/scheduler.c \
+         kernel/proc/gdt.c \
+         kernel/proc/tss.c \
+         kernel/proc/syscall.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)

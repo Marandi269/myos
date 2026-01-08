@@ -13,6 +13,11 @@
 #include "mm/vmm.h"
 #include "mm/page_fault.h"
 #include "drivers/pit.h"
+#include "proc/process.h"
+#include "proc/scheduler.h"
+#include "proc/gdt.h"
+#include "proc/tss.h"
+#include "proc/syscall.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
@@ -195,6 +200,46 @@ static void test_timer(void) {
     }
 }
 
+/* Test thread counter */
+static volatile int thread_counter = 0;
+
+/* Test thread function */
+static void test_thread_func(void *arg) {
+    int id = (int)(uint64_t)arg;
+    int i;
+
+    for (i = 0; i < 5; i++) {
+        kprintf("[Thread %d] iteration %d\n", id, i);
+        thread_counter++;
+        yield();
+    }
+    kprintf("[Thread %d] done\n", id);
+}
+
+/* Test scheduler */
+static void test_scheduler(void) {
+    process_t *t1, *t2;
+
+    kprintf("[TEST] Scheduler test\n");
+
+    /* Create test threads (they are automatically added to ready queue) */
+    t1 = kthread_create(test_thread_func, (void *)1, "test1");
+    t2 = kthread_create(test_thread_func, (void *)2, "test2");
+
+    if (!t1 || !t2) {
+        kprintf("  ERROR: Failed to create test threads\n");
+        return;
+    }
+
+    kprintf("  Created threads PID %d and %d\n", t1->pid, t2->pid);
+
+    /* Start scheduler */
+    scheduler_start();
+
+    /* This point is reached after scheduler_start returns (which it shouldn't normally)
+       but for testing, threads will run via yield() calls */
+}
+
 /* Kernel main entry point */
 void kernel_main(void) {
     /* Initialize serial port first for debug output */
@@ -217,6 +262,12 @@ void kernel_main(void) {
     /* Initialize physical memory manager */
     pmm_init(DEFAULT_MEMORY_SIZE);
 
+    /* Initialize GDT with user segments and TSS */
+    gdt_init();
+
+    /* Initialize SYSCALL/SYSRET */
+    syscall_init();
+
     /* Initialize kernel heap */
     heap_init();
 
@@ -229,6 +280,9 @@ void kernel_main(void) {
     /* Initialize keyboard driver */
     keyboard_init();
 
+    /* Initialize scheduler */
+    scheduler_init();
+
     /* Enable interrupts */
     __asm__ volatile ("sti");
 
@@ -238,6 +292,7 @@ void kernel_main(void) {
     test_memory();
     test_vmm();
     test_timer();
+    test_scheduler();
 
     /* Print final stats */
     pmm_print_stats();

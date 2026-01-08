@@ -5,6 +5,7 @@
 #include "pit.h"
 #include "pic.h"
 #include "lib/kprintf.h"
+#include "proc/scheduler.h"
 
 /* PIT I/O ports */
 #define PIT_CHANNEL0    0x40
@@ -97,4 +98,7 @@ void sleep_ms(uint32_t ms) {
 void pit_handler(void) {
     tick_count++;
     pic_send_eoi(IRQ_TIMER);
+
+    /* Call scheduler tick handler */
+    scheduler_tick();
 }

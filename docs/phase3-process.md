@@ -1,5 +1,38 @@
 # 阶段 3: 进程管理 (Process Management)
 
+## 状态: ✅ 已完成
+
+### 测试结果 (2026-01-08)
+```
+[Process] Initialized (max 64 processes)
+[Scheduler] Created thread 'idle' (PID 0)
+[Scheduler] Initialized
+
+[TEST] Scheduler test
+[Scheduler] Created thread 'test1' (PID 1)
+[Scheduler] Created thread 'test2' (PID 2)
+[Scheduler] Starting...
+[Thread 1] iteration 0
+[Thread 2] iteration 0
+[Thread 1] iteration 1
+[Thread 2] iteration 1
+...
+[Thread 1] done
+[Scheduler] Process 'test1' (PID 1) exited with code 0
+[Thread 2] done
+[Scheduler] Process 'test2' (PID 2) exited with code 0
+```
+
+### 已实现功能
+- ✅ 进程控制块 (PCB)
+- ✅ 上下文切换 (switch.S)
+- ✅ Round-Robin 调度器
+- ✅ 内核线程 (kthread_create)
+- ✅ 进程退出 (process_exit)
+- ✅ 定时器触发调度
+
+---
+
 ## 目标
 实现多任务支持，包括进程创建、调度、上下文切换和基本的进程生命周期管理。
 
