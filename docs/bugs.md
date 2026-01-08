@@ -2,26 +2,7 @@
 
 ## 当前 Bug
 
-### 1. Heap 内存释放错误
-**严重程度**: 🟡 中等
-**位置**: `kernel/mm/heap.c`, `kernel/fs/fd.c`
-
-```
-[Heap] ERROR: Invalid free (bad magic at 0x121538)
-```
-
-**描述**: 文件系统测试过程中出现无效的内存释放操作。尝试修复引用计数问题但仍然存在。
-
-**可能原因**:
-- 双重释放 (double free)
-- 释放了未分配的内存
-- 内存越界写入破坏了相邻块的 magic
-
-**影响**: 当前不影响主要功能测试通过。
-
----
-
-### 2. 编译警告: 函数类型转换
+### 1. 编译警告: 函数类型转换
 **严重程度**: 🟢 低
 **位置**: `kernel/proc/syscall.c:80-89`
 
@@ -40,7 +21,24 @@ to 'int64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)'
 
 ## 已修复
 
-### 1. 链接警告: 缺少 .note.GNU-stack ✓
+### 1. Heap 内存释放错误 ✓
+**修复时间**: 2026-01-08
+**修复提交**: 44095e3
+
+**原问题**:
+```
+[Heap] ERROR: Invalid free (bad magic at 0x121538)
+```
+
+**根本原因**: `split_block` 在分割大的 free 块时，会在分配的块后面创建新的 free 块 header。但如果那个位置已经有一个被分配的块（如 fd_table），就会覆盖那个块的 header，导致后续释放时 magic 校验失败。
+
+**修复方式**:
+1. `split_block`: 添加安全检查，如果新块位置已有 allocated 块则不分割
+2. `merge_free_blocks`: 只合并物理上相邻的块
+
+---
+
+### 2. 链接警告: 缺少 .note.GNU-stack ✓
 **修复时间**: 2026-01-08
 **修复提交**: 5a1e630
 
