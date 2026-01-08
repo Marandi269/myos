@@ -1,4 +1,4 @@
-# 已知问题 (Issues)
+# 已知问题 (Bugs)
 
 ## 当前 Bug
 
@@ -11,7 +11,7 @@ warning: cast between incompatible function types from 'int64_t (*)(int, char *,
 to 'int64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)'
 ```
 
-**描述**: 系统调用注册时的函数指针类型转换警告。这是内核开发中的常见做法。
+**描述**: 系统调用注册时的函数指针类型转换警告。这是内核开发中的常见做法，不影响功能。
 
 **修复建议** (可选):
 - 统一系统调用函数签名为 `int64_t (uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)`
@@ -22,6 +22,7 @@ to 'int64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)'
 ## 已修复
 
 ### 1. Heap 内存释放错误 ✓
+**验证时间**: 2026-01-08
 **修复时间**: 2026-01-08
 **修复提交**: 44095e3
 
