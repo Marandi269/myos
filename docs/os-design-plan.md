@@ -20,8 +20,8 @@
 | 5 | 文件系统 | ✅ 完成 | VFS, ramfs, devfs, stdio |
 | 6 | 用户空间 | ✅ 完成 | ELF加载器, libc, shell |
 | 7 | IPC | ✅ 完成 | 管道, 信号, 共享内存 |
-| 8 | 网络栈 | ⏳ 可选 | TCP/IP |
-| 9 | 高级特性 | ⏳ 可选 | SMP, 线程 |
+| 8 | 网络栈 | 📋 **可选** | TCP/IP, virtio-net |
+| 9 | 高级特性 | 📋 **可选** | SMP, pthread, TTY |
 
 ---
 

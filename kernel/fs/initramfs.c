@@ -109,7 +109,7 @@ int initramfs_load(void *data, size_t size) {
             }
 
             /* Create and write file */
-            if (vfs_create(path, mode & 0777) == 0 || 1) {
+            {
                 struct file *f = vfs_open(path, O_WRONLY | O_CREAT | O_TRUNC, mode & 0777);
                 if (f) {
                     if (filesize > 0) {

@@ -89,6 +89,13 @@ int elf_load_from_memory(process_t *proc, void *data, size_t size) {
         }
     }
 
+    /* Validate program header offset and size */
+    size_t phdr_end = ehdr->e_phoff + ehdr->e_phnum * sizeof(Elf64_Phdr);
+    if (phdr_end > size) {
+        kprintf("[ELF] Program headers extend beyond file\n");
+        return -ENOEXEC;
+    }
+
     /* Process program headers */
     phdr = (Elf64_Phdr *)((uint8_t *)data + ehdr->e_phoff);
 

@@ -207,7 +207,8 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap) {
 }
 
 int vsprintf(char *str, const char *format, va_list ap) {
-    return vsnprintf(str, (size_t)-1, format, ap);
+    /* Note: vsprintf is inherently unsafe. Use a large but reasonable limit */
+    return vsnprintf(str, 4096, format, ap);
 }
 
 int snprintf(char *str, size_t size, const char *format, ...) {

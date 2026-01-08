@@ -194,12 +194,23 @@ myos/
 | [os-design-plan.md](docs/os-design-plan.md) | 完整开发计划 (9 阶段) |
 | [phase6-userspace.md](docs/phase6-userspace.md) | 用户空间详细计划 |
 | [phase7-ipc.md](docs/phase7-ipc.md) | IPC 详细计划 |
+| [phase8-network.md](docs/phase8-network.md) | 网络栈详细计划 |
+| [phase9-advanced.md](docs/phase9-advanced.md) | 高级特性详细计划 |
 | [bugs.md](docs/bugs.md) | 已知问题追踪 |
 
 ### 下一步 (可选)
 
-- [ ] Phase 8: 网络栈 (TCP/IP, virtio-net)
-- [ ] Phase 9: 高级特性 (SMP 多核, pthread 线程)
+- [ ] Phase 8: 网络栈 - [详细计划](docs/phase8-network.md)
+  - virtio-net 驱动
+  - TCP/IP 协议栈
+  - Socket API
+  - DHCP 客户端
+
+- [ ] Phase 9: 高级特性 - [详细计划](docs/phase9-advanced.md)
+  - SMP 多核支持
+  - pthread 线程
+  - TTY/PTY 终端
+  - Framebuffer 图形
 
 ## 许可证
 

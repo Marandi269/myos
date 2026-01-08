@@ -177,24 +177,31 @@ static ssize_t pipe_file_write(struct file *file, const char *buf, size_t count)
  */
 static int pipe_read_release(struct file *file) {
     pipe_t *pipe;
+    int should_destroy = 0;
 
     if (!file || !file->f_private) {
         return -EINVAL;
     }
 
     pipe = (pipe_t *)file->f_private;
-    pipe->readers--;
+
+    /* Decrement reference count */
+    if (pipe->readers > 0) {
+        pipe->readers--;
+    }
     pipe->read_closed = (pipe->readers == 0);
 
     kprintf("[PIPE] Read end closed (readers=%d)\n", pipe->readers);
 
-    /* If both ends are closed, destroy the pipe */
-    if (pipe->readers == 0 && pipe->writers == 0) {
+    /* Check if both ends are closed */
+    should_destroy = (pipe->readers == 0 && pipe->writers == 0);
+
+    if (should_destroy) {
         kprintf("[PIPE] Both ends closed, destroying pipe\n");
         pipe_destroy(pipe);
-        file->f_private = NULL;
     }
 
+    file->f_private = NULL;
     return 0;
 }
 
@@ -203,24 +210,31 @@ static int pipe_read_release(struct file *file) {
  */
 static int pipe_write_release(struct file *file) {
     pipe_t *pipe;
+    int should_destroy = 0;
 
     if (!file || !file->f_private) {
         return -EINVAL;
     }
 
     pipe = (pipe_t *)file->f_private;
-    pipe->writers--;
+
+    /* Decrement reference count */
+    if (pipe->writers > 0) {
+        pipe->writers--;
+    }
     pipe->write_closed = (pipe->writers == 0);
 
     kprintf("[PIPE] Write end closed (writers=%d)\n", pipe->writers);
 
-    /* If both ends are closed, destroy the pipe */
-    if (pipe->readers == 0 && pipe->writers == 0) {
+    /* Check if both ends are closed */
+    should_destroy = (pipe->readers == 0 && pipe->writers == 0);
+
+    if (should_destroy) {
         kprintf("[PIPE] Both ends closed, destroying pipe\n");
         pipe_destroy(pipe);
-        file->f_private = NULL;
     }
 
+    file->f_private = NULL;
     return 0;
 }
 
