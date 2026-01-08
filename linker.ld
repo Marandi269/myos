@@ -42,6 +42,9 @@ SECTIONS
         *(.bss.*)
     }
 
+    /* End of kernel marker */
+    _end = .;
+
     /* 丢弃不需要的段 */
     /DISCARD/ :
     {

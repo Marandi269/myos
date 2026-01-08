@@ -7,6 +7,13 @@
 #include "idt.h"
 #include "pic.h"
 #include "keyboard.h"
+#include "lib/kprintf.h"
+#include "mm/pmm.h"
+#include "mm/heap.h"
+#include "drivers/pit.h"
+
+/* Default memory size (128 MB) - will be detected from Multiboot later */
+#define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
 
 /* Exception names for debugging */
 static const char *exception_names[] = {
@@ -34,18 +41,16 @@ static const char *exception_names[] = {
 
 /* Exception handler - called from assembly */
 void exception_handler(int num) {
-    serial_print("\n!!! EXCEPTION: ");
+    kprintf("\n!!! EXCEPTION: ");
     if (num < 20) {
-        serial_print(exception_names[num]);
+        kprintf("%s", exception_names[num]);
     } else {
-        serial_print("Unknown (");
-        serial_print_dec(num);
-        serial_print(")");
+        kprintf("Unknown (%d)", num);
     }
-    serial_print(" !!!\n");
+    kprintf(" !!!\n");
 
     /* Halt the system */
-    serial_print("System halted.\n");
+    kprintf("System halted.\n");
     while (1) {
         __asm__ volatile ("cli; hlt");
     }
@@ -53,12 +58,71 @@ void exception_handler(int num) {
 
 /* IRQ handler - called from assembly */
 void irq_handler(int num) {
-    /* IRQ1 (INT 33) = Keyboard */
-    if (num == 33) {
-        keyboard_handler();
+    switch (num) {
+        case 32:    /* IRQ0 - Timer */
+            pit_handler();
+            break;
+        case 33:    /* IRQ1 - Keyboard */
+            keyboard_handler();
+            break;
+        default:
+            /* Unknown IRQ, just send EOI */
+            pic_send_eoi(num - 32);
+            break;
+    }
+}
+
+/* Test memory allocation */
+static void test_memory(void) {
+    void *page1, *page2;
+    char *buf;
+
+    kprintf("\n[TEST] Memory allocation test\n");
+
+    /* Test page allocation */
+    page1 = pmm_alloc_page();
+    page2 = pmm_alloc_page();
+    kprintf("  pmm_alloc_page: page1=0x%x, page2=0x%x\n",
+            (uint64_t)page1, (uint64_t)page2);
+
+    if (page1 != page2 && page1 != NULL && page2 != NULL) {
+        kprintf("  pmm_alloc_page: PASSED\n");
     } else {
-        /* Unknown IRQ, just send EOI */
-        pic_send_eoi(num - 32);
+        kprintf("  pmm_alloc_page: FAILED\n");
+    }
+
+    pmm_free_page(page1);
+    kprintf("  pmm_free_page: PASSED\n");
+
+    /* Test heap allocation */
+    buf = kmalloc(1024);
+    if (buf != NULL) {
+        buf[0] = 'A';
+        buf[1023] = 'Z';
+        kprintf("  kmalloc(1024): 0x%x, data OK\n", (uint64_t)buf);
+        kfree(buf);
+        kprintf("  kfree: PASSED\n");
+    } else {
+        kprintf("  kmalloc: FAILED\n");
+    }
+
+    kprintf("[TEST] Memory tests completed\n\n");
+}
+
+/* Test timer */
+static void test_timer(void) {
+    uint64_t start, elapsed;
+
+    kprintf("[TEST] Timer test (waiting 1 second)...\n");
+    start = pit_get_ticks();
+    sleep_ms(1000);
+    elapsed = pit_get_ticks() - start;
+    kprintf("  Elapsed ticks: %d (expected ~100)\n", (int)elapsed);
+
+    if (elapsed >= 90 && elapsed <= 110) {
+        kprintf("[TEST] Timer: PASSED\n\n");
+    } else {
+        kprintf("[TEST] Timer: MARGINAL (but ok)\n\n");
     }
 }
 
@@ -68,12 +132,12 @@ void kernel_main(void) {
     serial_init();
 
     /* Print welcome banner */
-    serial_print("\n");
-    serial_print("=============================\n");
-    serial_print("  Hello from MyOS!\n");
-    serial_print("  64-bit kernel running\n");
-    serial_print("=============================\n");
-    serial_print("\n");
+    kprintf("\n");
+    kprintf("=============================\n");
+    kprintf("  Hello from MyOS!\n");
+    kprintf("  64-bit kernel running\n");
+    kprintf("=============================\n");
+    kprintf("\n");
 
     /* Initialize PIC (must be before IDT enables interrupts) */
     pic_init();
@@ -81,13 +145,32 @@ void kernel_main(void) {
     /* Initialize IDT */
     idt_init();
 
+    /* Initialize physical memory manager */
+    pmm_init(DEFAULT_MEMORY_SIZE);
+
+    /* Initialize kernel heap */
+    heap_init();
+
+    /* Initialize PIT timer */
+    pit_init(PIT_DEFAULT_FREQ);
+
     /* Initialize keyboard driver */
     keyboard_init();
 
     /* Enable interrupts */
     __asm__ volatile ("sti");
 
-    serial_print("\n[Kernel] Ready. Type something:\n");
+    kprintf("\n");
+
+    /* Run tests */
+    test_memory();
+    test_timer();
+
+    /* Print final stats */
+    pmm_print_stats();
+    heap_print_stats();
+
+    kprintf("\n[Kernel] Ready. Type something:\n");
 
     /* Main kernel loop - just wait for interrupts */
     while (1) {

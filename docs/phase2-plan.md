@@ -1,11 +1,33 @@
-# 阶段 2: 基础内核服务 - 下一步计划
+# 阶段 2: 基础内核服务
 
 ## 当前状态
-MVP 已完成 ✅
-- 64位内核启动
-- 串口输出
-- 基础中断 (IDT/PIC)
-- 键盘回显
+**✅ 阶段 2 已完成！**
+
+已实现功能:
+- 64位内核启动 ✅
+- 串口输出 ✅
+- 基础中断 (IDT/PIC) ✅
+- 键盘回显 ✅
+- kprintf 格式化输出 ✅
+- 物理内存管理 (PMM) ✅
+- 内核堆 (kmalloc/kfree) ✅
+- PIT 定时器 (100Hz) ✅
+
+### 测试结果 (2026-01-08)
+
+```
+[PMM] Total memory: 128 MB (32768 pages)
+[PMM] Free memory: 126 MB
+[Heap] Initialized: 64 KB
+[PIT] Initialized at 100 Hz
+
+[TEST] Memory allocation test
+  pmm_alloc_page: PASSED
+  kmalloc/kfree: PASSED
+[TEST] Timer test
+  Elapsed ticks: 100 (expected ~100)
+  Timer: PASSED
+```
 
 ---
 

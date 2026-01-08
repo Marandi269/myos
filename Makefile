@@ -17,7 +17,17 @@ LDFLAGS = -T linker.ld -nostdlib -z max-page-size=0x1000
 
 # 源文件
 ASM_SRCS = kernel/boot.S
-C_SRCS = kernel/main.c kernel/serial.c kernel/idt.c kernel/pic.c kernel/keyboard.c
+
+C_SRCS = kernel/main.c \
+         kernel/serial.c \
+         kernel/idt.c \
+         kernel/pic.c \
+         kernel/keyboard.c \
+         kernel/lib/string.c \
+         kernel/lib/kprintf.c \
+         kernel/mm/pmm.c \
+         kernel/mm/heap.c \
+         kernel/drivers/pit.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)
@@ -54,10 +64,4 @@ debug: myos.iso
 
 clean:
 	rm -rf $(OBJS) kernel.bin myos.iso iso/
-
-# 依赖关系
-kernel/main.o: kernel/main.c include/types.h kernel/serial.h kernel/idt.h kernel/pic.h kernel/keyboard.h
-kernel/serial.o: kernel/serial.c include/types.h kernel/serial.h
-kernel/idt.o: kernel/idt.c include/types.h kernel/idt.h kernel/serial.h
-kernel/pic.o: kernel/pic.c include/types.h kernel/pic.h kernel/serial.h
-kernel/keyboard.o: kernel/keyboard.c include/types.h kernel/keyboard.h kernel/pic.h kernel/serial.h
+	find kernel -name "*.o" -delete

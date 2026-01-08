@@ -106,7 +106,8 @@ myos/
 ## 文档
 
 - [完整开发计划](docs/os-design-plan.md) - 9 个阶段、100+ 可拆分任务
-- [MVP 任务文档](docs/mvp-minimal-os.md) - 最小可运行内核的详细任务
+- [MVP 任务文档](docs/mvp-minimal-os.md) - 最小可运行内核的详细任务 ✅
+- [阶段 2 计划](docs/phase2-plan.md) - 内存管理、定时器、调试增强
 
 ## 许可证
 
