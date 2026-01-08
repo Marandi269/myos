@@ -39,7 +39,13 @@ C_SRCS = kernel/main.c \
          kernel/proc/tss.c \
          kernel/proc/syscall.c \
          kernel/proc/user_space.c \
-         kernel/proc/usermode.c
+         kernel/proc/usermode.c \
+         kernel/fs/vfs.c \
+         kernel/fs/fd.c \
+         kernel/fs/stdio.c \
+         kernel/fs/fs.c \
+         kernel/fs/ramfs/ramfs.c \
+         kernel/fs/devfs/devfs.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)

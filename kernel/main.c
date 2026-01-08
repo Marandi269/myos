@@ -19,6 +19,7 @@
 #include "proc/tss.h"
 #include "proc/syscall.h"
 #include "proc/usermode.h"
+#include "fs/fs.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
@@ -289,9 +290,13 @@ void kernel_main(void) {
 
     kprintf("\n");
 
+    /* Initialize filesystem */
+    fs_init();
+
     /* Run tests */
     test_memory();
     test_vmm();
+    fs_test();
     test_timer();
     /* test_scheduler(); -- Skip scheduler test to run usermode test */
 
