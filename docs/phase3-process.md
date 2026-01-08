@@ -86,13 +86,86 @@
 | P-14 | 进程等待 (wait) | P-13 | ❌ | 父进程回收子进程 |
 | P-15 | 僵尸进程处理 | P-13, P-14 | ❌ | 资源正确释放 |
 
-### 3.5 用户进程支持 (为阶段 4 准备)
+### 3.5 用户态准备 (阶段 4 前置)
+
+**⚠️ 关键依赖**: 用户态进程需要以下基础设施，否则 ring3 代码无法运行。
 
 | 任务ID | 任务名称 | 依赖 | 可并行 | 验证方式 |
 |--------|----------|------|--------|----------|
-| P-16 | 用户地址空间 | VMM | ✅ | 独立页表创建 |
-| P-17 | 用户栈设置 | P-16 | ❌ | 用户栈映射 |
-| P-18 | 内核态/用户态切换 | P-17 | ❌ | ring0 <-> ring3 |
+| P-16 | GDT 添加用户段 | boot | ✅ | 用户代码/数据段描述符 |
+| P-17 | TSS 设置 | P-16 | ❌ | 中断时内核栈切换正确 |
+| P-18 | SYSCALL MSR 配置 | P-17 | ❌ | syscall 指令不崩溃 |
+| P-19 | 用户地址空间 | VMM | ✅ | 独立页表创建 |
+| P-20 | 用户栈设置 | P-19 | ❌ | 用户栈映射 |
+| P-21 | 内核态/用户态切换 | P-17, P-20 | ❌ | ring0 <-> ring3 |
+
+#### P-16: GDT 用户段
+
+```c
+// 当前 GDT (boot.S):
+// 0x00: null
+// 0x08: kernel code (ring 0)
+// 0x10: kernel data (ring 0)
+
+// 需要添加:
+// 0x18: user code (ring 3)  - 0x00AFFA000000FFFF
+// 0x20: user data (ring 3)  - 0x00AFF2000000FFFF
+// 0x28: TSS descriptor (16 bytes)
+```
+
+#### P-17: TSS (Task State Segment)
+
+```c
+// kernel/proc/tss.h
+
+typedef struct {
+    uint32_t reserved0;
+    uint64_t rsp0;        // 内核栈指针 (ring0)
+    uint64_t rsp1;        // ring1 栈 (未使用)
+    uint64_t rsp2;        // ring2 栈 (未使用)
+    uint64_t reserved1;
+    uint64_t ist[7];      // 中断栈表
+    uint64_t reserved2;
+    uint16_t reserved3;
+    uint16_t iopb_offset; // IO 权限位图偏移
+} __attribute__((packed)) tss_t;
+
+void tss_init(void);
+void tss_set_rsp0(uint64_t rsp0);  // 设置当前进程的内核栈
+```
+
+**为什么需要 TSS？**
+- 用户态 (ring3) 发生中断/异常时，CPU 需要切换到内核栈
+- CPU 从 TSS.rsp0 获取内核栈地址
+- 没有正确设置 TSS，任何中断都会 triple fault
+
+#### P-18: SYSCALL MSR 配置
+
+```c
+// kernel/proc/syscall.c
+
+#define MSR_STAR   0xC0000081  // 段选择子
+#define MSR_LSTAR  0xC0000082  // syscall 入口地址
+#define MSR_SFMASK 0xC0000084  // RFLAGS 掩码
+
+void syscall_init(void) {
+    // STAR: 段选择子
+    // bits 32-47: SYSRET CS/SS (user) = 0x18 | 3
+    // bits 48-63: SYSCALL CS/SS (kernel) = 0x08
+    uint64_t star = ((uint64_t)0x0008 << 32) | ((uint64_t)0x0018 << 48);
+    wrmsr(MSR_STAR, star);
+
+    // LSTAR: syscall 处理入口
+    wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
+
+    // SFMASK: syscall 时清除的 RFLAGS 位 (IF, DF)
+    wrmsr(MSR_SFMASK, 0x200 | 0x400);
+
+    // 启用 SYSCALL/SYSRET (EFER.SCE)
+    uint64_t efer = rdmsr(0xC0000080);
+    wrmsr(0xC0000080, efer | 1);
+}
+```
 
 ---
 
@@ -382,11 +455,15 @@ P-08 调度器框架 ◄──────────────────�
                               │                   │
                               │                   └──> P-15 僵尸处理
                               │
-                              └──> P-16 用户地址空间
-                                        │
-                                        └──> P-17 用户栈
-                                                  │
-                                                  └──> P-18 态切换
+                              └──> P-16 GDT 用户段 ──> P-17 TSS
+                                                           │
+                                                           └──> P-18 SYSCALL MSR
+                                                                      │
+                                   P-19 用户地址空间 ◄─────────────────┤
+                                        │                             │
+                                        └──> P-20 用户栈              │
+                                                  │                   │
+                                                  └──> P-21 态切换 ◄──┘
 ```
 
 ---

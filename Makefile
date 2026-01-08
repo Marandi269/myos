@@ -16,7 +16,8 @@ ASFLAGS = -m64
 LDFLAGS = -T linker.ld -nostdlib -z max-page-size=0x1000
 
 # 源文件
-ASM_SRCS = kernel/boot.S
+ASM_SRCS = kernel/boot.S \
+           kernel/proc/switch.S
 
 C_SRCS = kernel/main.c \
          kernel/serial.c \
@@ -29,7 +30,9 @@ C_SRCS = kernel/main.c \
          kernel/mm/heap.c \
          kernel/mm/vmm.c \
          kernel/mm/page_fault.c \
-         kernel/drivers/pit.c
+         kernel/drivers/pit.c \
+         kernel/proc/process.c \
+         kernel/proc/scheduler.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)
@@ -52,6 +55,9 @@ myos.iso: kernel.bin grub.cfg
 
 # 汇编文件编译
 kernel/boot.o: kernel/boot.S
+	$(AS) $(ASFLAGS) -c $< -o $@
+
+kernel/proc/switch.o: kernel/proc/switch.S
 	$(AS) $(ASFLAGS) -c $< -o $@
 
 # C 文件编译
