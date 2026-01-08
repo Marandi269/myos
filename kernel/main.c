@@ -368,6 +368,7 @@ void kernel_main(void) {
     fs_test();
     test_timer();
     test_syscalls();
+    test_scheduler();
 
     /* Print final stats */
     pmm_print_stats();

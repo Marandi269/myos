@@ -25,3 +25,6 @@ gdt_flush:
     movw %ax, %ss
 
     ret
+
+/* Mark stack as non-executable */
+.section .note.GNU-stack,"",@progbits

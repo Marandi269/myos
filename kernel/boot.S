@@ -311,3 +311,6 @@ multiboot_info_ptr:
 stack_bottom:
     .skip 16384
 stack_top:
+
+/* Mark stack as non-executable */
+.section .note.GNU-stack,"",@progbits

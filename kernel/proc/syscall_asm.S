@@ -164,3 +164,6 @@ syscall_entry:
 .align 8
 kernel_syscall_stack:
     .quad 0                     /* Will be initialized by syscall_init */
+
+/* Mark stack as non-executable */
+.section .note.GNU-stack,"",@progbits

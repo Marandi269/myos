@@ -54,3 +54,6 @@ switch_to_new:
     popq %rbp
 
     ret
+
+/* Mark stack as non-executable */
+.section .note.GNU-stack,"",@progbits

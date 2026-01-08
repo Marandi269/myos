@@ -21,17 +21,34 @@ struct fd_table* fd_table_create(void) {
  * Destroy a file descriptor table
  */
 void fd_table_destroy(struct fd_table *table) {
-    int i;
+    int i, j;
+    struct file *file;
+    int ref_count;
 
     if (!table) {
         return;
     }
 
-    /* Close all open files */
+    /* Close all open files - count references to same file first,
+     * then call file_put the correct number of times */
     for (i = 0; i < MAX_FD; i++) {
-        if (table->fds[i]) {
-            file_put(table->fds[i]);
+        file = table->fds[i];
+        if (file) {
+            /* Count how many fds point to this file */
+            ref_count = 1;
             table->fds[i] = NULL;
+
+            for (j = i + 1; j < MAX_FD; j++) {
+                if (table->fds[j] == file) {
+                    ref_count++;
+                    table->fds[j] = NULL;
+                }
+            }
+
+            /* Release all references */
+            while (ref_count-- > 0) {
+                file_put(file);
+            }
         }
     }
 
