@@ -5,6 +5,7 @@
 #include "proc/futex.h"
 #include "proc/process.h"
 #include "proc/scheduler.h"
+#include "proc/syscall.h"
 #include "lib/kprintf.h"
 #include "lib/string.h"
 
@@ -89,7 +90,7 @@ static int futex_wake(uint32_t *uaddr, int nr_wake, uint32_t bitset) {
             waiter->active = false;
             if (waiter->proc && waiter->proc->state == PROC_BLOCKED) {
                 waiter->proc->state = PROC_READY;
-                sched_add(waiter->proc);
+                sched_ready(waiter->proc);
                 woken++;
             }
         }

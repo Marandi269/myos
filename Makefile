@@ -45,6 +45,8 @@ C_SRCS = kernel/main.c \
          kernel/proc/user_space.c \
          kernel/proc/usermode.c \
          kernel/proc/elf.c \
+         kernel/proc/clone.c \
+         kernel/proc/futex.c \
          kernel/fs/vfs.c \
          kernel/fs/fd.c \
          kernel/fs/stdio.c \

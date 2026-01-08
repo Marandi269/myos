@@ -5,6 +5,7 @@
 #include "proc/clone.h"
 #include "proc/process.h"
 #include "proc/scheduler.h"
+#include "proc/syscall.h"
 #include "mm/pmm.h"
 #include "mm/vmm.h"
 #include "mm/heap.h"
@@ -145,7 +146,7 @@ int64_t sys_clone(uint64_t flags, void *child_stack,
 
     /* Make child runnable */
     child->state = PROC_READY;
-    sched_add(child);
+    sched_ready(child);
 
     kprintf("[clone] Created thread %d from %d, flags=0x%x\n",
             child->pid, parent->pid, (uint32_t)flags);

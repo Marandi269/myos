@@ -35,6 +35,10 @@
 #define SYS_sigreturn   15
 #define SYS_munmap      11
 #define SYS_pipe2       293
+#define SYS_CLONE       56
+#define SYS_FUTEX       202
+#define SYS_SET_TID_ADDRESS 218
+#define SYS_ARCH_PRCTL  158
 
 /* Inline syscall wrappers */
 static inline long syscall0(long num) {
