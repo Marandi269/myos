@@ -196,6 +196,7 @@ myos/
 | [phase7-ipc.md](docs/phase7-ipc.md) | IPC 详细计划 |
 | [phase8-network.md](docs/phase8-network.md) | 网络栈详细计划 |
 | [phase9-advanced.md](docs/phase9-advanced.md) | 高级特性详细计划 |
+| [phase10-disk.md](docs/phase10-disk.md) | 磁盘启动详细计划 |
 | [bugs.md](docs/bugs.md) | 已知问题追踪 |
 
 ### 下一步 (可选)
@@ -211,6 +212,12 @@ myos/
   - pthread 线程
   - TTY/PTY 终端
   - Framebuffer 图形
+
+- [ ] Phase 10: 磁盘启动 - [详细计划](docs/phase10-disk.md)
+  - IDE/ATA 磁盘驱动
+  - ext2 文件系统
+  - 持久化存储
+  - 根文件系统切换
 
 ## 许可证
 
