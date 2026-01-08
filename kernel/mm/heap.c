@@ -99,6 +99,14 @@ static void split_block(struct heap_block *block, size_t size) {
 
     /* Create new free block after this one */
     new_block = (struct heap_block *)((uint8_t *)block + HEADER_SIZE + size);
+
+    /* Safety check: don't overwrite an existing allocated block.
+     * This can happen if the free block list is corrupted or
+     * if block sizes are incorrect. */
+    if (new_block->magic == HEAP_BLOCK_MAGIC && !new_block->free) {
+        return;  /* Don't split - keep the larger block */
+    }
+
     new_block->magic = HEAP_BLOCK_MAGIC;
     new_block->size = remaining;
     new_block->free = 1;
@@ -117,13 +125,12 @@ static void split_block(struct heap_block *block, size_t size) {
 
 /* Merge adjacent free blocks */
 static void merge_free_blocks(struct heap_block *block) {
-    uint64_t heap_base = (uint64_t)heap_start;
-    uint64_t heap_limit = heap_base + heap_size;
+    uint64_t block_end;
 
-    /* Merge with next block if free */
+    /* Merge with next block if free and physically adjacent */
     if (block->next && block->next->free && block->next->magic == HEAP_BLOCK_MAGIC) {
-        /* Validate next block is within heap */
-        if ((uint64_t)block->next >= heap_base && (uint64_t)block->next < heap_limit) {
+        block_end = (uint64_t)block + HEADER_SIZE + block->size;
+        if (block_end == (uint64_t)block->next) {
             struct heap_block *next = block->next;
             block->size += HEADER_SIZE + next->size;
             block->next = next->next;
@@ -132,15 +139,14 @@ static void merge_free_blocks(struct heap_block *block) {
             } else {
                 heap_end = block;
             }
-            /* Clear merged block's magic to prevent reuse */
             next->magic = 0;
         }
     }
 
-    /* Merge with previous block if free */
+    /* Merge with previous block if free and physically adjacent */
     if (block->prev && block->prev->free && block->prev->magic == HEAP_BLOCK_MAGIC) {
-        /* Validate prev block is within heap */
-        if ((uint64_t)block->prev >= heap_base && (uint64_t)block->prev < heap_limit) {
+        uint64_t prev_end = (uint64_t)block->prev + HEADER_SIZE + block->prev->size;
+        if (prev_end == (uint64_t)block) {
             struct heap_block *prev = block->prev;
             prev->size += HEADER_SIZE + block->size;
             prev->next = block->next;
@@ -149,7 +155,6 @@ static void merge_free_blocks(struct heap_block *block) {
             } else {
                 heap_end = prev;
             }
-            /* Clear merged block's magic to prevent reuse */
             block->magic = 0;
         }
     }

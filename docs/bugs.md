@@ -2,7 +2,26 @@
 
 ## 当前 Bug
 
-### 1. 编译警告: 函数类型转换
+### 1. Heap 内存释放错误
+**严重程度**: 🟡 中等
+**位置**: `kernel/mm/heap.c`, `kernel/fs/fd.c`
+
+```
+[Heap] ERROR: Invalid free (bad magic at 0x121538)
+```
+
+**描述**: 文件系统测试过程中出现无效的内存释放操作。尝试修复引用计数问题但仍然存在。
+
+**可能原因**:
+- 双重释放 (double free)
+- 释放了未分配的内存
+- 内存越界写入破坏了相邻块的 magic
+
+**影响**: 当前不影响主要功能测试通过。
+
+---
+
+### 2. 编译警告: 函数类型转换
 **严重程度**: 🟢 低
 **位置**: `kernel/proc/syscall.c:80-89`
 
@@ -21,25 +40,7 @@ to 'int64_t (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)'
 
 ## 已修复
 
-### 1. Heap 内存释放错误 ✓
-**修复时间**: 2026-01-08
-**修复提交**: 5a1e630
-
-**原问题**:
-```
-[Heap] ERROR: Invalid free (bad magic at 0x121538)
-[Heap] WARNING: Double free at 0x121538
-```
-
-**根本原因**: `fd_table_destroy()` 中多个 fd 指向同一 file 对象时，引用计数处理不正确。
-
-**修复方式**: 在 `kernel/fs/fd.c` 中：
-- 先统计指向同一 file 的 fd 数量
-- 调用对应次数的 `file_put()` 以正确减少引用计数
-
----
-
-### 2. 链接警告: 缺少 .note.GNU-stack ✓
+### 1. 链接警告: 缺少 .note.GNU-stack ✓
 **修复时间**: 2026-01-08
 **修复提交**: 5a1e630
 
