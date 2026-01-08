@@ -198,12 +198,13 @@ myos/
 
 | 文档 | 描述 |
 |------|------|
-| [os-design-plan.md](docs/os-design-plan.md) | 完整开发计划 (9 阶段) |
+| [os-design-plan.md](docs/os-design-plan.md) | 完整开发计划 (11 阶段) |
 | [phase6-userspace.md](docs/phase6-userspace.md) | 用户空间详细计划 |
 | [phase7-ipc.md](docs/phase7-ipc.md) | IPC 详细计划 |
 | [phase8-network.md](docs/phase8-network.md) | 网络栈详细计划 |
 | [phase9-advanced.md](docs/phase9-advanced.md) | 高级特性详细计划 |
 | [phase10-disk.md](docs/phase10-disk.md) | 磁盘启动详细计划 |
+| [phase11-io-multiplexing.md](docs/phase11-io-multiplexing.md) | I/O 多路复用详细计划 |
 | [bugs.md](docs/bugs.md) | 已知问题追踪 |
 
 ### 下一步 (可选)
@@ -221,6 +222,11 @@ myos/
   - ext2 文件系统
   - 持久化存储
   - 根文件系统切换
+
+- [ ] Phase 11: I/O 多路复用 - [详细计划](docs/phase11-io-multiplexing.md)
+  - 等待队列机制
+  - select/poll 系统调用
+  - epoll (可选)
 
 ## 许可证
 

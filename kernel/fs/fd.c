@@ -13,6 +13,7 @@ struct fd_table* fd_table_create(void) {
     struct fd_table *table = kzalloc(sizeof(struct fd_table));
     if (table) {
         table->next_fd = 0;
+        table->refcount = 1;
     }
     return table;
 }
@@ -80,7 +81,38 @@ struct fd_table* fd_table_clone(struct fd_table *table) {
     }
 
     new_table->next_fd = table->next_fd;
+    new_table->refcount = 1;
     return new_table;
+}
+
+/*
+ * Copy file descriptor table (same as clone)
+ */
+struct fd_table* fd_table_copy(struct fd_table *table) {
+    return fd_table_clone(table);
+}
+
+/*
+ * Increment reference count (for thread sharing)
+ */
+void fd_table_ref(struct fd_table *table) {
+    if (table) {
+        table->refcount++;
+    }
+}
+
+/*
+ * Decrement reference count, destroy if zero
+ */
+void fd_table_unref(struct fd_table *table) {
+    if (!table) {
+        return;
+    }
+
+    table->refcount--;
+    if (table->refcount <= 0) {
+        fd_table_destroy(table);
+    }
 }
 
 /*

@@ -19,6 +19,7 @@
 struct fd_table {
     struct file *fds[MAX_FD];
     int next_fd;  /* Hint for next available fd */
+    int refcount; /* Reference count for sharing */
 };
 
 /* Create a new file descriptor table */
@@ -29,6 +30,15 @@ void fd_table_destroy(struct fd_table *table);
 
 /* Clone a file descriptor table (for fork) */
 struct fd_table* fd_table_clone(struct fd_table *table);
+
+/* Copy file descriptor table (creates new independent copy) */
+struct fd_table* fd_table_copy(struct fd_table *table);
+
+/* Increment reference count (for thread sharing) */
+void fd_table_ref(struct fd_table *table);
+
+/* Decrement reference count, destroy if zero */
+void fd_table_unref(struct fd_table *table);
 
 /* Allocate a file descriptor for the given file */
 int fd_alloc(struct fd_table *table, struct file *file);

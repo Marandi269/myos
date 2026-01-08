@@ -23,6 +23,7 @@
 | 8 | 网络栈 | ✅ 完成 | TCP/IP, virtio-net, Socket |
 | 9 | 高级特性 | 📋 **可选** | SMP, pthread, TTY |
 | 10 | 磁盘启动 | 📋 **可选** | IDE/ext2, 持久化存储 |
+| 11 | I/O 多路复用 | 📋 **可选** | select/poll/epoll |
 
 ---
 

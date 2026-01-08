@@ -50,6 +50,10 @@
 #define SYS_SIGPROCMASK 14
 #define SYS_SIGRETURN   15
 #define SYS_PIPE2       293
+#define SYS_CLONE       56
+#define SYS_FUTEX       202
+#define SYS_SET_TID_ADDRESS 218
+#define SYS_ARCH_PRCTL  158
 
 #define MAX_SYSCALL     256
 
