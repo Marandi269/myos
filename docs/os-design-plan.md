@@ -14,10 +14,11 @@
 | MVP | 最小内核 | ✅ 完成 | 串口输出, 键盘中断 |
 | 2 | 基础内核服务 | ✅ 完成 | PMM, Heap, PIT, kprintf |
 | 2.5 | 虚拟内存 | ✅ 完成 | VMM, 页表映射, 缺页处理 |
-| 3 | 进程管理 | 📋 计划中 | PCB, 调度器, fork/exec |
-| 4 | 系统调用 | ⏳ 待开始 | syscall 接口 |
-| 5 | 文件系统 | ⏳ 待开始 | VFS, ramfs |
-| 6 | 用户空间 | ⏳ 待开始 | libc, shell |
+| 3 | 进程管理 | ✅ 完成 | PCB, 调度器, 上下文切换 |
+| 3.5 | 用户态准备 | ✅ 完成 | GDT用户段, TSS, SYSCALL MSR |
+| 4 | 系统调用 | ✅ 完成 | syscall 框架, read/write/brk |
+| 5 | 文件系统 | ✅ 完成 | VFS, ramfs, devfs, stdio |
+| 6 | 用户空间 | 📋 **下一步** | ELF加载器, libc, shell |
 | 7 | IPC | ⏳ 待开始 | 管道, 信号 |
 | 8 | 网络栈 | ⏳ 可选 | TCP/IP |
 | 9 | 高级特性 | ⏳ 可选 | SMP, 线程 |
