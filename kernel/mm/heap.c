@@ -117,27 +117,40 @@ static void split_block(struct heap_block *block, size_t size) {
 
 /* Merge adjacent free blocks */
 static void merge_free_blocks(struct heap_block *block) {
+    uint64_t heap_base = (uint64_t)heap_start;
+    uint64_t heap_limit = heap_base + heap_size;
+
     /* Merge with next block if free */
-    while (block->next && block->next->free) {
-        struct heap_block *next = block->next;
-        block->size += HEADER_SIZE + next->size;
-        block->next = next->next;
-        if (next->next) {
-            next->next->prev = block;
-        } else {
-            heap_end = block;
+    if (block->next && block->next->free && block->next->magic == HEAP_BLOCK_MAGIC) {
+        /* Validate next block is within heap */
+        if ((uint64_t)block->next >= heap_base && (uint64_t)block->next < heap_limit) {
+            struct heap_block *next = block->next;
+            block->size += HEADER_SIZE + next->size;
+            block->next = next->next;
+            if (next->next) {
+                next->next->prev = block;
+            } else {
+                heap_end = block;
+            }
+            /* Clear merged block's magic to prevent reuse */
+            next->magic = 0;
         }
     }
 
     /* Merge with previous block if free */
-    if (block->prev && block->prev->free) {
-        struct heap_block *prev = block->prev;
-        prev->size += HEADER_SIZE + block->size;
-        prev->next = block->next;
-        if (block->next) {
-            block->next->prev = prev;
-        } else {
-            heap_end = prev;
+    if (block->prev && block->prev->free && block->prev->magic == HEAP_BLOCK_MAGIC) {
+        /* Validate prev block is within heap */
+        if ((uint64_t)block->prev >= heap_base && (uint64_t)block->prev < heap_limit) {
+            struct heap_block *prev = block->prev;
+            prev->size += HEADER_SIZE + block->size;
+            prev->next = block->next;
+            if (block->next) {
+                block->next->prev = prev;
+            } else {
+                heap_end = prev;
+            }
+            /* Clear merged block's magic to prevent reuse */
+            block->magic = 0;
         }
     }
 }
