@@ -27,6 +27,8 @@ C_SRCS = kernel/main.c \
          kernel/lib/kprintf.c \
          kernel/mm/pmm.c \
          kernel/mm/heap.c \
+         kernel/mm/vmm.c \
+         kernel/mm/page_fault.c \
          kernel/drivers/pit.c
 
 # 目标文件

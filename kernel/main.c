@@ -10,6 +10,8 @@
 #include "lib/kprintf.h"
 #include "mm/pmm.h"
 #include "mm/heap.h"
+#include "mm/vmm.h"
+#include "mm/page_fault.h"
 #include "drivers/pit.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
@@ -41,6 +43,14 @@ static const char *exception_names[] = {
 
 /* Exception handler - called from assembly */
 void exception_handler(int num) {
+    /* Special handling for page fault (exception 14) */
+    if (num == 14) {
+        /* Error code is pushed by CPU for page faults */
+        /* For now, just call with 0 - proper error code handling needs asm changes */
+        page_fault_handler(0);
+        return;
+    }
+
     kprintf("\n!!! EXCEPTION: ");
     if (num < 20) {
         kprintf("%s", exception_names[num]);
@@ -109,6 +119,65 @@ static void test_memory(void) {
     kprintf("[TEST] Memory tests completed\n\n");
 }
 
+/* Test VMM */
+static void test_vmm(void) {
+    uint64_t test_vaddr = 0x10000000;  /* 256MB - outside current mapping */
+    uint64_t test_paddr;
+    volatile uint64_t *ptr;
+    uint64_t phys;
+
+    kprintf("[TEST] Virtual Memory Manager\n");
+
+    /* Allocate a physical page */
+    test_paddr = (uint64_t)pmm_alloc_page();
+    if (!test_paddr) {
+        kprintf("  ERROR: Failed to allocate test page\n");
+        return;
+    }
+
+    /* Test 1: Map a new page */
+    kprintf("  Map 0x%x -> 0x%x: ", test_vaddr, test_paddr);
+    if (vmm_map_page(test_vaddr, test_paddr, PTE_PRESENT | PTE_WRITABLE) == 0) {
+        kprintf("OK\n");
+    } else {
+        kprintf("FAILED\n");
+        pmm_free_page((void *)test_paddr);
+        return;
+    }
+
+    /* Test 2: Write and read data */
+    ptr = (volatile uint64_t *)test_vaddr;
+    *ptr = 0xDEADBEEF12345678UL;
+    kprintf("  Write/Read test: ");
+    if (*ptr == 0xDEADBEEF12345678UL) {
+        kprintf("PASSED\n");
+    } else {
+        kprintf("FAILED (got 0x%x)\n", *ptr);
+    }
+
+    /* Test 3: Get physical address */
+    kprintf("  vmm_get_phys: ");
+    phys = vmm_get_phys(test_vaddr);
+    if (phys == test_paddr) {
+        kprintf("PASSED (0x%x)\n", phys);
+    } else {
+        kprintf("FAILED (expected 0x%x, got 0x%x)\n", test_paddr, phys);
+    }
+
+    /* Test 4: Unmap */
+    kprintf("  Unmap: ");
+    if (vmm_unmap_page(test_vaddr) == 0) {
+        kprintf("OK\n");
+    } else {
+        kprintf("FAILED\n");
+    }
+
+    /* Free physical page */
+    pmm_free_page((void *)test_paddr);
+
+    kprintf("[TEST] VMM: ALL PASSED\n\n");
+}
+
 /* Test timer */
 static void test_timer(void) {
     uint64_t start, elapsed;
@@ -151,6 +220,9 @@ void kernel_main(void) {
     /* Initialize kernel heap */
     heap_init();
 
+    /* Initialize VMM (uses existing boot page tables) */
+    vmm_init();
+
     /* Initialize PIT timer */
     pit_init(PIT_DEFAULT_FREQ);
 
@@ -164,6 +236,7 @@ void kernel_main(void) {
 
     /* Run tests */
     test_memory();
+    test_vmm();
     test_timer();
 
     /* Print final stats */

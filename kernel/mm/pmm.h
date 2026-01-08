@@ -8,7 +8,9 @@
 #include "types.h"
 
 /* Page size: 4KB */
+#ifndef PAGE_SIZE
 #define PAGE_SIZE       4096
+#endif
 #define PAGE_SHIFT      12
 
 /* Memory region types */

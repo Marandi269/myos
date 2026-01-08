@@ -1,12 +1,30 @@
 # 阶段 2.5: 虚拟内存管理 (VMM)
 
+## 状态: ✅ 已完成
+
+### 测试结果 (2026-01-08)
+```
+[VMM] Initializing virtual memory manager
+[VMM] Using boot PML4 at 0x107000
+[VMM] Initialized (identity mapping active)
+
+[TEST] Virtual Memory Manager
+  Map 0x10000000 -> 0x129000: OK
+  Write/Read test: PASSED
+  vmm_get_phys: PASSED (0x129000)
+  Unmap: OK
+[TEST] VMM: ALL PASSED
+```
+
+---
+
 ## 背景
 
-阶段 2 完成了物理内存管理 (PMM)，但缺少虚拟内存管理 (VMM)。当前状态：
+阶段 2 完成了物理内存管理 (PMM)。阶段 2.5 添加虚拟内存管理 (VMM)：
 
 - ✅ PMM: 物理页帧分配/释放
-- ✅ Heap: 内核堆 (但直接使用物理地址)
-- ❌ **VMM: 动态页表管理** - 缺失
+- ✅ Heap: 内核堆 (kmalloc/kfree)
+- ✅ **VMM: 动态页表管理**
 
 **为什么需要 VMM？**
 1. 进程隔离 - 每个进程需要独立地址空间
