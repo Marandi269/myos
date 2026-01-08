@@ -31,6 +31,12 @@ typedef struct {
 /* Forward declaration for fd_table */
 struct fd_table;
 
+/* Signal handler type */
+typedef void (*sighandler_t)(int);
+
+/* Number of signals */
+#define NSIG 32
+
 /* Process Control Block */
 typedef struct process {
     /* Basic info */
@@ -54,6 +60,11 @@ typedef struct process {
     /* File system */
     struct fd_table *fd_table;  /* File descriptor table */
     char cwd[256];              /* Current working directory */
+
+    /* Signals */
+    uint64_t sig_pending;       /* Pending signals bitmap */
+    uint64_t sig_blocked;       /* Blocked signals bitmap */
+    sighandler_t sig_handlers[NSIG]; /* Signal handlers */
 
     /* Scheduling info */
     uint32_t priority;          /* Priority level */

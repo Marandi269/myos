@@ -30,6 +30,11 @@
 #define SYS_mkdir       83
 #define SYS_getppid     110
 #define SYS_getdents64  217
+#define SYS_sigaction   13
+#define SYS_sigprocmask 14
+#define SYS_sigreturn   15
+#define SYS_munmap      11
+#define SYS_pipe2       293
 
 /* Inline syscall wrappers */
 static inline long syscall0(long num) {

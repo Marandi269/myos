@@ -280,15 +280,43 @@ $
 
 ## 交付物清单
 
-- [ ] `kernel/ipc/pipe.c` - 管道实现
-- [ ] `kernel/ipc/pipe.h` - 管道接口
-- [ ] `kernel/ipc/signal.c` - 信号实现
-- [ ] `kernel/ipc/signal.h` - 信号定义和接口
-- [ ] `kernel/ipc/shm.c` - 共享内存 (可选)
-- [ ] `include/signal.h` - 用户态信号头文件
-- [ ] `libc/src/signal.c` - libc 信号函数
-- [ ] 更新 `kernel/proc/syscall.c` - 新增 IPC 系统调用
-- [ ] 更新 shell 支持管道语法 `|`
+- [x] `kernel/ipc/pipe.c` - 管道实现
+- [x] `kernel/ipc/pipe.h` - 管道接口
+- [x] `kernel/ipc/signal.c` - 信号实现
+- [x] `kernel/ipc/signal.h` - 信号定义和接口
+- [x] `kernel/ipc/shm.c` - 共享内存 (mmap实现)
+- [x] `kernel/ipc/shm.h` - 共享内存接口
+- [x] `libc/include/signal.h` - 用户态信号头文件
+- [x] `libc/include/sys/mman.h` - mmap 头文件
+- [x] `libc/src/signal.c` - libc 信号函数
+- [x] `libc/src/mman.c` - libc mmap 函数
+- [x] `libc/src/pipe.c` - libc pipe 函数
+- [x] 更新 `kernel/proc/syscall.c` - 新增 IPC 系统调用
+- [x] 更新 shell 支持管道语法 `|` 和 kill 命令
+
+## 实现状态
+
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| IPC-01 管道 | ✅ 完成 | pipe(), 环形缓冲区, 阻塞读写 |
+| IPC-02 信号基础 | ✅ 完成 | kill(), SIGKILL/SIGTERM |
+| IPC-03 用户态信号 | ✅ 完成 | signal(), sigaction(), sigprocmask() |
+| IPC-04 共享内存 | ✅ 完成 | mmap(MAP_ANONYMOUS), munmap() |
+| Shell 管道 | ✅ 完成 | cmd1 \| cmd2 语法支持 |
+
+## 构建说明
+
+```bash
+# 构建完整系统
+make full
+
+# 运行
+make run
+
+# 测试管道
+$ ls | cat
+$ echo hello | cat
+```
 
 ---
 

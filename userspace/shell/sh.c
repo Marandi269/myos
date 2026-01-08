@@ -2,8 +2,9 @@
  * sh.c - Simple shell
  *
  * A basic command-line interpreter supporting:
- * - Built-in commands: cd, pwd, exit, help
+ * - Built-in commands: cd, pwd, exit, help, kill
  * - External command execution
+ * - Pipe support (cmd1 | cmd2)
  * - Simple command parsing
  */
 
@@ -16,13 +17,19 @@
 
 #define MAX_LINE 256
 #define MAX_ARGS 32
+#define MAX_PIPES 8
 #define PROMPT "$ "
+
+/* Forward declarations for syscalls not in headers */
+extern int pipe(int pipefd[2]);
+extern int kill(int pid, int sig);
 
 /* Built-in command handlers */
 static int builtin_cd(char **args);
 static int builtin_pwd(char **args);
 static int builtin_exit(char **args);
 static int builtin_help(char **args);
+static int builtin_kill(char **args);
 
 /* Built-in command table */
 static struct {
@@ -34,6 +41,7 @@ static struct {
     { "pwd",   builtin_pwd,  "Print working directory" },
     { "exit",  builtin_exit, "Exit shell" },
     { "help",  builtin_help, "Show this help" },
+    { "kill",  builtin_kill, "Send signal to process" },
     { NULL,    NULL,         NULL }
 };
 
@@ -74,7 +82,37 @@ static int builtin_help(char **args) {
     for (int i = 0; builtins[i].name; i++) {
         printf("  %-8s - %s\n", builtins[i].name, builtins[i].help);
     }
-    printf("\nExternal commands: Type program name to execute\n");
+    printf("\nPipe: cmd1 | cmd2\n");
+    printf("External commands: Type program name to execute\n");
+    return 0;
+}
+
+/* kill command */
+static int builtin_kill(char **args) {
+    if (!args[1]) {
+        printf("kill: missing pid\n");
+        return 1;
+    }
+
+    int sig = 15;  /* SIGTERM default */
+    int pid;
+
+    if (args[1][0] == '-') {
+        sig = atoi(args[1] + 1);
+        if (!args[2]) {
+            printf("kill: missing pid\n");
+            return 1;
+        }
+        pid = atoi(args[2]);
+    } else {
+        pid = atoi(args[1]);
+    }
+
+    if (kill(pid, sig) < 0) {
+        printf("kill: failed to send signal\n");
+        return 1;
+    }
+
     return 0;
 }
 
@@ -92,15 +130,22 @@ static int parse_line(char *line, char **args) {
             break;
         }
 
+        /* Check for pipe character */
+        if (*line == '|') {
+            args[argc++] = line;
+            *line++ = '\0';
+            continue;
+        }
+
         /* Start of argument */
         args[argc++] = line;
 
         /* Find end of argument */
-        while (*line && *line != ' ' && *line != '\t' && *line != '\n') {
+        while (*line && *line != ' ' && *line != '\t' && *line != '\n' && *line != '|') {
             line++;
         }
 
-        if (*line) {
+        if (*line && *line != '|') {
             *line++ = '\0';
         }
     }
@@ -119,11 +164,28 @@ static int try_builtin(char **args) {
     return -1;  /* Not a built-in */
 }
 
-/* Execute external command */
+/* Execute a single command */
+static void exec_cmd(char **args) {
+    char path[256];
+
+    /* If command doesn't contain '/', try /bin/ prefix */
+    if (strchr(args[0], '/') == NULL) {
+        snprintf(path, sizeof(path), "/bin/%s", args[0]);
+        execve(path, args, NULL);
+    }
+
+    /* Try the command as-is */
+    execve(args[0], args, NULL);
+
+    /* Exec failed */
+    printf("sh: %s: command not found\n", args[0]);
+    exit(127);
+}
+
+/* Execute external command (no pipes) */
 static int execute(char **args) {
     pid_t pid;
     int status;
-    char path[256];
 
     pid = fork();
     if (pid < 0) {
@@ -133,19 +195,7 @@ static int execute(char **args) {
 
     if (pid == 0) {
         /* Child process */
-
-        /* If command doesn't contain '/', try /bin/ prefix */
-        if (strchr(args[0], '/') == NULL) {
-            snprintf(path, sizeof(path), "/bin/%s", args[0]);
-            execve(path, args, NULL);
-        }
-
-        /* Try the command as-is */
-        execve(args[0], args, NULL);
-
-        /* Exec failed */
-        printf("sh: %s: command not found\n", args[0]);
-        exit(127);
+        exec_cmd(args);
     }
 
     /* Parent process - wait for child */
@@ -153,6 +203,92 @@ static int execute(char **args) {
 
     if (WIFEXITED(status)) {
         return WEXITSTATUS(status);
+    }
+    return 1;
+}
+
+/* Check if args contain a pipe */
+static int find_pipe(char **args, int argc) {
+    for (int i = 0; i < argc; i++) {
+        if (args[i][0] == '|' && args[i][1] == '\0') {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Execute commands with pipe */
+static int execute_pipe(char **args, int argc) {
+    int pipe_pos = find_pipe(args, argc);
+
+    if (pipe_pos < 0) {
+        /* No pipe, execute normally */
+        return execute(args);
+    }
+
+    /* Split at pipe */
+    args[pipe_pos] = NULL;
+    char **cmd1 = args;
+    char **cmd2 = &args[pipe_pos + 1];
+
+    if (!cmd1[0] || !cmd2[0]) {
+        printf("sh: syntax error near '|'\n");
+        return 1;
+    }
+
+    /* Create pipe */
+    int pipefd[2];
+    if (pipe(pipefd) < 0) {
+        printf("sh: pipe failed\n");
+        return 1;
+    }
+
+    /* Fork first child (writes to pipe) */
+    pid_t pid1 = fork();
+    if (pid1 < 0) {
+        printf("sh: fork failed\n");
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return 1;
+    }
+
+    if (pid1 == 0) {
+        /* First child: redirect stdout to pipe write end */
+        close(pipefd[0]);           /* Close unused read end */
+        dup2(pipefd[1], 1);         /* stdout -> pipe write */
+        close(pipefd[1]);           /* Close original fd */
+        exec_cmd(cmd1);
+    }
+
+    /* Fork second child (reads from pipe) */
+    pid_t pid2 = fork();
+    if (pid2 < 0) {
+        printf("sh: fork failed\n");
+        close(pipefd[0]);
+        close(pipefd[1]);
+        waitpid(pid1, NULL, 0);
+        return 1;
+    }
+
+    if (pid2 == 0) {
+        /* Second child: redirect stdin from pipe read end */
+        close(pipefd[1]);           /* Close unused write end */
+        dup2(pipefd[0], 0);         /* stdin <- pipe read */
+        close(pipefd[0]);           /* Close original fd */
+        exec_cmd(cmd2);
+    }
+
+    /* Parent: close both pipe ends and wait for children */
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    int status1, status2;
+    waitpid(pid1, &status1, 0);
+    waitpid(pid2, &status2, 0);
+
+    /* Return status of last command */
+    if (WIFEXITED(status2)) {
+        return WEXITSTATUS(status2);
     }
     return 1;
 }
@@ -184,7 +320,7 @@ int main(int argc, char *argv[]) {
     int arg_count;
     int ret;
 
-    printf("\nMyOS Shell v0.1\n");
+    printf("\nMyOS Shell v0.2\n");
     printf("Type 'help' for available commands.\n\n");
 
     while (1) {
@@ -200,6 +336,12 @@ int main(int argc, char *argv[]) {
         /* Parse line */
         arg_count = parse_line(line, args);
         if (arg_count == 0) {
+            continue;
+        }
+
+        /* Check for pipe first (before builtins) */
+        if (find_pipe(args, arg_count) >= 0) {
+            execute_pipe(args, arg_count);
             continue;
         }
 

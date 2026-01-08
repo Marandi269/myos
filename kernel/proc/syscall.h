@@ -46,6 +46,10 @@
 #define SYS_MKDIR       83
 #define SYS_GETDENTS64  217
 #define SYS_GETPPID     110
+#define SYS_SIGACTION   13
+#define SYS_SIGPROCMASK 14
+#define SYS_SIGRETURN   15
+#define SYS_PIPE2       293
 
 #define MAX_SYSCALL     256
 
@@ -65,6 +69,8 @@
 #define ENOEXEC     8   /* Exec format error */
 #define ESRCH       3   /* No such process */
 #define EIO         5   /* I/O error */
+#define EPIPE       32  /* Broken pipe */
+#define EMFILE      24  /* Too many open files */
 
 /* System call handler function type */
 typedef int64_t (*syscall_fn_t)(uint64_t, uint64_t, uint64_t,

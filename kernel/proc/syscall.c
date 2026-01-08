@@ -17,9 +17,12 @@
 #include "../fs/stdio.h"
 #include "../mm/pmm.h"
 #include "../mm/vmm.h"
+#include "../ipc/pipe.h"
+#include "../ipc/signal.h"
+#include "../ipc/shm.h"
 
 /* Global fd table (for now - should be per-process) */
-static struct fd_table *global_fd_table = NULL;
+struct fd_table *global_fd_table = NULL;
 
 /* Get the current process's fd table */
 static struct fd_table* get_fd_table(void) {
@@ -101,6 +104,16 @@ void syscall_init(void) {
     syscall_register(SYS_CHDIR,  (syscall_fn_t)sys_chdir);
     syscall_register(SYS_MKDIR,  (syscall_fn_t)sys_mkdir);
     syscall_register(SYS_GETDENTS64, (syscall_fn_t)sys_getdents64);
+
+    /* IPC syscalls */
+    syscall_register(SYS_PIPE,   (syscall_fn_t)sys_pipe);
+    syscall_register(SYS_PIPE2,  (syscall_fn_t)sys_pipe2);
+    syscall_register(SYS_KILL,   (syscall_fn_t)sys_kill);
+    syscall_register(SYS_SIGACTION,   (syscall_fn_t)sys_sigaction);
+    syscall_register(SYS_SIGPROCMASK, (syscall_fn_t)sys_sigprocmask);
+    syscall_register(SYS_SIGRETURN,   (syscall_fn_t)sys_sigreturn);
+    syscall_register(SYS_MMAP,   (syscall_fn_t)sys_mmap);
+    syscall_register(SYS_MUNMAP, (syscall_fn_t)sys_munmap);
 
     /*
      * STAR MSR layout:

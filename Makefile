@@ -48,7 +48,10 @@ C_SRCS = kernel/main.c \
          kernel/fs/fs.c \
          kernel/fs/initramfs.c \
          kernel/fs/ramfs/ramfs.c \
-         kernel/fs/devfs/devfs.c
+         kernel/fs/devfs/devfs.c \
+         kernel/ipc/pipe.c \
+         kernel/ipc/signal.c \
+         kernel/ipc/shm.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)
