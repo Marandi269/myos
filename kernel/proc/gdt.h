@@ -7,12 +7,21 @@
 
 #include "types.h"
 
-/* GDT segment selectors */
+/* GDT segment selectors
+ *
+ * Layout optimized for SYSRET:
+ *   SYSRET loads: SS = STAR[63:48] + 8 | 3
+ *                 CS = STAR[63:48] + 16 | 3
+ *
+ *   With STAR[63:48] = 0x10 (GDT_KERNEL_DATA):
+ *   - SS = 0x10 + 8 = 0x18 | 3 = 0x1B (User Data)
+ *   - CS = 0x10 + 16 = 0x20 | 3 = 0x23 (User Code)
+ */
 #define GDT_NULL        0x00
 #define GDT_KERNEL_CODE 0x08
 #define GDT_KERNEL_DATA 0x10
-#define GDT_USER_CODE   0x18
-#define GDT_USER_DATA   0x20
+#define GDT_USER_DATA   0x18    /* User Data before User Code for SYSRET */
+#define GDT_USER_CODE   0x20
 #define GDT_TSS         0x28
 
 /* Ring levels */
@@ -20,8 +29,8 @@
 #define RING_USER       3
 
 /* User segment selectors (with RPL=3) */
-#define USER_CODE_SEL   (GDT_USER_CODE | RING_USER)
-#define USER_DATA_SEL   (GDT_USER_DATA | RING_USER)
+#define USER_DATA_SEL   (GDT_USER_DATA | RING_USER)  /* 0x1B */
+#define USER_CODE_SEL   (GDT_USER_CODE | RING_USER)  /* 0x23 */
 
 /* GDT entry structure */
 struct gdt_entry {

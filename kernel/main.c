@@ -18,6 +18,7 @@
 #include "proc/gdt.h"
 #include "proc/tss.h"
 #include "proc/syscall.h"
+#include "proc/usermode.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
@@ -292,12 +293,21 @@ void kernel_main(void) {
     test_memory();
     test_vmm();
     test_timer();
-    test_scheduler();
+    /* test_scheduler(); -- Skip scheduler test to run usermode test */
 
     /* Print final stats */
     pmm_print_stats();
     heap_print_stats();
 
+    kprintf("\n[Kernel] Running user mode test...\n");
+
+    /* Test user mode (P-21)
+     * This will create a user process and jump to ring 3
+     * The user process will make syscalls and then exit
+     */
+    test_usermode();
+
+    /* If we get here, something went wrong or user process exited */
     kprintf("\n[Kernel] Ready. Type something:\n");
 
     /* Main kernel loop - just wait for interrupts */

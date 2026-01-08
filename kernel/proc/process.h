@@ -41,6 +41,12 @@ typedef struct process {
     uint64_t kernel_stack;      /* Top of kernel stack */
     uint64_t kernel_stack_base; /* Base of kernel stack (for freeing) */
 
+    /* User space (P-19, P-20) */
+    uint64_t *page_table;       /* Process page table (PML4) */
+    uint64_t user_stack;        /* User stack pointer */
+    uint64_t user_entry;        /* User code entry point */
+    int is_user;                /* 1 if user process, 0 if kernel thread */
+
     /* Scheduling info */
     uint32_t priority;          /* Priority level */
     uint32_t time_slice;        /* Remaining time slice */

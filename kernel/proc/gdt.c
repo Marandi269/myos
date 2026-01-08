@@ -71,13 +71,14 @@ void gdt_init(void) {
     /* Access: Present(1) | DPL(00) | Type(1) | Exec(0) | DC(0) | RW(1) | Acc(0) = 0x92 */
     gdt_set_entry(2, 0, 0xFFFFF, 0x92, 0x20);
 
-    /* User Code: 64-bit, ring 3, executable, readable */
-    /* Access: Present(1) | DPL(11) | Type(1) | Exec(1) | DC(0) | RW(1) | Acc(0) = 0xFA */
-    gdt_set_entry(3, 0, 0xFFFFF, 0xFA, 0x20);
+    /* User Data: 64-bit, ring 3, writable (index 3 = 0x18)
+     * Access: Present(1) | DPL(11) | Type(1) | Exec(0) | DC(0) | RW(1) | Acc(0) = 0xF2
+     * Note: User Data comes before User Code for SYSRET compatibility */
+    gdt_set_entry(3, 0, 0xFFFFF, 0xF2, 0x20);
 
-    /* User Data: 64-bit, ring 3, writable */
-    /* Access: Present(1) | DPL(11) | Type(1) | Exec(0) | DC(0) | RW(1) | Acc(0) = 0xF2 */
-    gdt_set_entry(4, 0, 0xFFFFF, 0xF2, 0x20);
+    /* User Code: 64-bit, ring 3, executable, readable (index 4 = 0x20)
+     * Access: Present(1) | DPL(11) | Type(1) | Exec(1) | DC(0) | RW(1) | Acc(0) = 0xFA */
+    gdt_set_entry(4, 0, 0xFFFFF, 0xFA, 0x20);
 
     /* TSS descriptor (uses 2 slots) */
     gdt_set_tss(5, (uint64_t)tss, sizeof(tss_t) - 1);

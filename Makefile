@@ -37,7 +37,9 @@ C_SRCS = kernel/main.c \
          kernel/proc/scheduler.c \
          kernel/proc/gdt.c \
          kernel/proc/tss.c \
-         kernel/proc/syscall.c
+         kernel/proc/syscall.c \
+         kernel/proc/user_space.c \
+         kernel/proc/usermode.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)

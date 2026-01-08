@@ -23,6 +23,12 @@ static inline void wrmsr(uint32_t msr, uint64_t value) {
 /* External syscall entry point (in syscall_asm.S) */
 extern void syscall_entry(void);
 
+/* Kernel syscall stack (defined in syscall_asm.S) */
+extern uint64_t kernel_syscall_stack;
+
+/* Kernel stack for syscalls (8KB) */
+static uint8_t syscall_stack[8192] __attribute__((aligned(16)));
+
 /* Initialize SYSCALL/SYSRET */
 void syscall_init(void) {
     uint64_t star, efer;
@@ -31,56 +37,23 @@ void syscall_init(void) {
      * STAR MSR layout:
      * Bits 0-31:  Reserved
      * Bits 32-47: SYSCALL CS/SS (kernel) - CS = this value, SS = this value + 8
-     * Bits 48-63: SYSRET CS/SS (user) - CS = this value + 16, SS = this value + 8
+     * Bits 48-63: SYSRET CS/SS (user)    - SS = this value + 8, CS = this value + 16
      *
-     * For our GDT:
+     * Our GDT layout (optimized for SYSRET):
      *   0x08 = Kernel Code
      *   0x10 = Kernel Data
-     *   0x18 = User Code (but SYSRET uses value+16, so we need 0x08)
-     *   0x20 = User Data (but SYSRET uses value+8)
+     *   0x18 = User Data   (before User Code!)
+     *   0x20 = User Code
+     *   0x28 = TSS
      *
-     * SYSCALL: CS = STAR[47:32], SS = STAR[47:32] + 8
-     * SYSRET:  CS = STAR[63:48] + 16, SS = STAR[63:48] + 8
-     *
-     * We want:
-     *   SYSCALL: CS = 0x08, SS = 0x10 -> STAR[47:32] = 0x08
-     *   SYSRET:  CS = 0x18|3 = 0x1B, SS = 0x20|3 = 0x23
-     *            -> STAR[63:48] = 0x08 (so CS = 0x08+16 = 0x18, SS = 0x08+8 = 0x10)
-     *
-     * Wait, SYSRET adds 16 to get CS and 8 to get SS, with RPL=3.
-     * So STAR[63:48] should be 0x08:
-     *   CS = 0x08 + 16 = 0x18, with RPL=3 -> 0x1B
-     *   SS = 0x08 + 8 = 0x10, with RPL=3 -> 0x13
-     *
-     * But we want SS = 0x20|3 = 0x23. So STAR[63:48] should be 0x18:
-     *   CS = 0x18 + 16 = 0x28 (wrong!)
-     *
-     * Actually the layout for SYSRET is different. Let me check again:
-     * SYSRET loads: SS = STAR[63:48] + 8, CS = STAR[63:48] + 16
-     * Both get RPL=3 automatically.
-     *
-     * Our GDT: 0x00=null, 0x08=kcode, 0x10=kdata, 0x18=udata, 0x20=ucode, 0x28=tss
-     *
-     * Wait, the standard layout is: ucode before udata. Let me use:
-     * 0x18 = User Code
-     * 0x20 = User Data
-     *
-     * For SYSRET: STAR[63:48] = 0x10 (which is user base - 8)
-     *   SS = 0x10 + 8 = 0x18 | 3 = 0x1B  -- but that's user code!
-     *
-     * The AMD64 ABI expects: user code = 0x23, user data = 0x2B
-     * Which means: GDT[4] = user code, GDT[5] = user data
-     *
-     * Simpler approach: Match Linux layout
-     *   0x08 = Kernel Code
-     *   0x10 = Kernel Data
-     *   0x18 = User Data  (reversed!)
-     *   0x20 = User Code  (reversed!)
-     *
-     * Then STAR[63:48] = 0x10:
-     *   SS.sel = 0x10 + 8 = 0x18 | 3 = 0x1B (user data) ✓
-     *   CS.sel = 0x10 + 16 = 0x20 | 3 = 0x23 (user code) ✓
+     * SYSCALL: CS = STAR[47:32] = 0x08, SS = 0x08 + 8 = 0x10
+     * SYSRET:  SS = STAR[63:48] + 8 | 3 = 0x10 + 8 | 3 = 0x1B (User Data)
+     *          CS = STAR[63:48] + 16 | 3 = 0x10 + 16 | 3 = 0x23 (User Code)
      */
+
+    /* Initialize kernel syscall stack (stack grows down, so use top of array) */
+    kernel_syscall_stack = (uint64_t)&syscall_stack[sizeof(syscall_stack)];
+    kprintf("[SYSCALL] Kernel stack at 0x%lx\n", kernel_syscall_stack);
 
     /* STAR: bits 32-47 = kernel CS (0x08), bits 48-63 = user base (0x10) */
     star = ((uint64_t)GDT_KERNEL_CODE << 32) | ((uint64_t)(GDT_KERNEL_DATA) << 48);
