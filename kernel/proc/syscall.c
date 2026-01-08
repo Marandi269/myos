@@ -1,10 +1,15 @@
 /*
  * syscall.c - System call implementation
+ *
+ * Implements the system call framework and basic system calls.
  */
 
 #include "syscall.h"
+#include "process.h"
+#include "scheduler.h"
 #include "gdt.h"
-#include "lib/kprintf.h"
+#include "../lib/kprintf.h"
+#include "../serial.h"
 
 /* Read MSR */
 static inline uint64_t rdmsr(uint32_t msr) {
@@ -23,116 +28,246 @@ static inline void wrmsr(uint32_t msr, uint64_t value) {
 /* External syscall entry point (in syscall_asm.S) */
 extern void syscall_entry(void);
 
-/* Initialize SYSCALL/SYSRET */
+/* System call table */
+static syscall_fn_t syscall_table[MAX_SYSCALL];
+
+/* Per-process brk value (simplified - global for now) */
+static uint64_t current_brk = 0x400000;  /* Start heap at 4MB */
+
+/*
+ * Default handler for unimplemented syscalls
+ */
+static int64_t sys_unimplemented(uint64_t a1, uint64_t a2, uint64_t a3,
+                                  uint64_t a4, uint64_t a5, uint64_t a6) {
+    (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6;
+    return -ENOSYS;
+}
+
+/*
+ * Register a system call handler
+ */
+void syscall_register(int num, syscall_fn_t handler) {
+    if (num >= 0 && num < MAX_SYSCALL) {
+        syscall_table[num] = handler;
+    }
+}
+
+/*
+ * Initialize SYSCALL/SYSRET
+ */
 void syscall_init(void) {
     uint64_t star, efer;
+    int i;
+
+    /* Initialize syscall table with default handler */
+    for (i = 0; i < MAX_SYSCALL; i++) {
+        syscall_table[i] = sys_unimplemented;
+    }
+
+    /* Register implemented syscalls */
+    syscall_register(SYS_READ,   (syscall_fn_t)sys_read);
+    syscall_register(SYS_WRITE,  (syscall_fn_t)sys_write);
+    syscall_register(SYS_BRK,    (syscall_fn_t)sys_brk);
+    syscall_register(SYS_GETPID, (syscall_fn_t)sys_getpid);
+    syscall_register(SYS_EXIT,   (syscall_fn_t)sys_exit);
 
     /*
      * STAR MSR layout:
-     * Bits 0-31:  Reserved
-     * Bits 32-47: SYSCALL CS/SS (kernel) - CS = this value, SS = this value + 8
-     * Bits 48-63: SYSRET CS/SS (user) - CS = this value + 16, SS = this value + 8
+     * Bits 32-47: SYSCALL CS (kernel) - CS = this value, SS = this value + 8
+     * Bits 48-63: SYSRET base - CS = value + 16, SS = value + 8 (with RPL=3)
      *
-     * For our GDT:
-     *   0x08 = Kernel Code
-     *   0x10 = Kernel Data
-     *   0x18 = User Code (but SYSRET uses value+16, so we need 0x08)
-     *   0x20 = User Data (but SYSRET uses value+8)
-     *
-     * SYSCALL: CS = STAR[47:32], SS = STAR[47:32] + 8
-     * SYSRET:  CS = STAR[63:48] + 16, SS = STAR[63:48] + 8
-     *
-     * We want:
-     *   SYSCALL: CS = 0x08, SS = 0x10 -> STAR[47:32] = 0x08
-     *   SYSRET:  CS = 0x18|3 = 0x1B, SS = 0x20|3 = 0x23
-     *            -> STAR[63:48] = 0x08 (so CS = 0x08+16 = 0x18, SS = 0x08+8 = 0x10)
-     *
-     * Wait, SYSRET adds 16 to get CS and 8 to get SS, with RPL=3.
-     * So STAR[63:48] should be 0x08:
-     *   CS = 0x08 + 16 = 0x18, with RPL=3 -> 0x1B
-     *   SS = 0x08 + 8 = 0x10, with RPL=3 -> 0x13
-     *
-     * But we want SS = 0x20|3 = 0x23. So STAR[63:48] should be 0x18:
-     *   CS = 0x18 + 16 = 0x28 (wrong!)
-     *
-     * Actually the layout for SYSRET is different. Let me check again:
-     * SYSRET loads: SS = STAR[63:48] + 8, CS = STAR[63:48] + 16
-     * Both get RPL=3 automatically.
-     *
-     * Our GDT: 0x00=null, 0x08=kcode, 0x10=kdata, 0x18=udata, 0x20=ucode, 0x28=tss
-     *
-     * Wait, the standard layout is: ucode before udata. Let me use:
-     * 0x18 = User Code
-     * 0x20 = User Data
-     *
-     * For SYSRET: STAR[63:48] = 0x10 (which is user base - 8)
-     *   SS = 0x10 + 8 = 0x18 | 3 = 0x1B  -- but that's user code!
-     *
-     * The AMD64 ABI expects: user code = 0x23, user data = 0x2B
-     * Which means: GDT[4] = user code, GDT[5] = user data
-     *
-     * Simpler approach: Match Linux layout
-     *   0x08 = Kernel Code
-     *   0x10 = Kernel Data
-     *   0x18 = User Data  (reversed!)
-     *   0x20 = User Code  (reversed!)
-     *
-     * Then STAR[63:48] = 0x10:
-     *   SS.sel = 0x10 + 8 = 0x18 | 3 = 0x1B (user data) ✓
-     *   CS.sel = 0x10 + 16 = 0x20 | 3 = 0x23 (user code) ✓
+     * Our GDT: 0x08=kcode, 0x10=kdata, 0x18=udata, 0x20=ucode
+     * STAR[32:47] = 0x08 -> SYSCALL: CS=0x08, SS=0x10
+     * STAR[48:63] = 0x10 -> SYSRET: CS=0x20|3=0x23, SS=0x18|3=0x1B
      */
-
-    /* STAR: bits 32-47 = kernel CS (0x08), bits 48-63 = user base (0x10) */
     star = ((uint64_t)GDT_KERNEL_CODE << 32) | ((uint64_t)(GDT_KERNEL_DATA) << 48);
     wrmsr(MSR_STAR, star);
 
     /* LSTAR: syscall entry point */
     wrmsr(MSR_LSTAR, (uint64_t)syscall_entry);
 
-    /* SFMASK: clear IF and DF on syscall */
+    /* SFMASK: clear IF (0x200) and DF (0x400) on syscall */
     wrmsr(MSR_SFMASK, 0x200 | 0x400);
 
     /* Enable SYSCALL/SYSRET in EFER */
     efer = rdmsr(MSR_EFER);
     wrmsr(MSR_EFER, efer | EFER_SCE);
 
-    kprintf("[SYSCALL] Initialized\n");
+    kprintf("[SYSCALL] Initialized with %d handlers\n", MAX_SYSCALL);
 }
 
-/* System call numbers */
-#define SYS_EXIT    0
-#define SYS_WRITE   1
-#define SYS_GETPID  2
-
-/* System call handler */
+/*
+ * System call dispatcher - called from syscall_entry
+ */
 uint64_t syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2,
                          uint64_t arg3, uint64_t arg4, uint64_t arg5) {
-    (void)arg3; (void)arg4; (void)arg5;
-
-    switch (num) {
-        case SYS_EXIT:
-            kprintf("[SYSCALL] exit(%d)\n", (int)arg1);
-            /* TODO: implement process exit */
-            return 0;
-
-        case SYS_WRITE:
-            /* write(fd, buf, len) - for now just print to serial */
-            if (arg1 == 1) {  /* stdout */
-                const char *buf = (const char *)arg2;
-                uint64_t len = arg3;
-                for (uint64_t i = 0; i < len; i++) {
-                    kprintf("%c", buf[i]);
-                }
-                return len;
-            }
-            return -1;
-
-        case SYS_GETPID:
-            /* TODO: return actual PID */
-            return 1;
-
-        default:
-            kprintf("[SYSCALL] Unknown syscall %d\n", (int)num);
-            return -1;
+    if (num >= MAX_SYSCALL) {
+        kprintf("[SYSCALL] Invalid syscall number: %d\n", (int)num);
+        return -ENOSYS;
     }
+
+    return syscall_table[num](arg1, arg2, arg3, arg4, arg5, 0);
+}
+
+/*
+ * sys_read - Read from a file descriptor
+ *
+ * ssize_t read(int fd, void *buf, size_t count)
+ *
+ * For now, only supports reading from stdin (fd 0) via keyboard buffer.
+ * Returns number of bytes read, or negative error.
+ */
+int64_t sys_read(int fd, char *buf, size_t count) {
+    if (!buf) {
+        return -EFAULT;
+    }
+
+    if (fd == 0) {
+        /* stdin - not implemented yet, return 0 (EOF) */
+        /* TODO: read from keyboard buffer when implemented */
+        return 0;
+    }
+
+    /* Other fds - not implemented without VFS */
+    return -EBADF;
+}
+
+/*
+ * sys_write - Write to a file descriptor
+ *
+ * ssize_t write(int fd, const void *buf, size_t count)
+ *
+ * Supports stdout (fd 1) and stderr (fd 2) -> serial output.
+ * Returns number of bytes written, or negative error.
+ */
+int64_t sys_write(int fd, const char *buf, size_t count) {
+    size_t i;
+
+    if (!buf) {
+        return -EFAULT;
+    }
+
+    if (fd == 1 || fd == 2) {
+        /* stdout/stderr -> serial port */
+        for (i = 0; i < count; i++) {
+            serial_putchar(buf[i]);
+        }
+        return (int64_t)count;
+    }
+
+    /* Other fds - not implemented without VFS */
+    return -EBADF;
+}
+
+/*
+ * sys_brk - Change data segment size (heap management)
+ *
+ * void *brk(void *addr)
+ *
+ * If addr is 0, return current brk.
+ * Otherwise, try to set brk to addr and return new brk.
+ */
+int64_t sys_brk(uint64_t addr) {
+    uint64_t page_aligned;
+
+    /* Query current brk */
+    if (addr == 0) {
+        return (int64_t)current_brk;
+    }
+
+    /* Set new brk (page-aligned) */
+    page_aligned = (addr + 0xFFF) & ~0xFFFUL;
+
+    /* Simple implementation - just update the value */
+    /* TODO: Actually allocate/deallocate pages */
+    if (page_aligned >= 0x400000 && page_aligned < 0x10000000) {
+        current_brk = page_aligned;
+        return (int64_t)current_brk;
+    }
+
+    /* Invalid address range */
+    return (int64_t)current_brk;
+}
+
+/*
+ * sys_getpid - Get process ID
+ *
+ * pid_t getpid(void)
+ *
+ * Returns the PID of the calling process.
+ */
+int64_t sys_getpid(void) {
+    if (current_proc) {
+        return (int64_t)current_proc->pid;
+    }
+    return 0;
+}
+
+/*
+ * sys_exit - Terminate the calling process
+ *
+ * void exit(int status)
+ *
+ * Terminates the process and records exit status.
+ * Does not return.
+ */
+int64_t sys_exit(int status) {
+    kprintf("[SYSCALL] Process %d exiting with status %d\n",
+            current_proc ? current_proc->pid : 0, status);
+
+    if (current_proc) {
+        current_proc->exit_code = status;
+        current_proc->state = PROC_ZOMBIE;
+    }
+
+    /* Yield to scheduler - we won't return */
+    schedule();
+
+    /* Should never reach here */
+    return 0;
+}
+
+/*
+ * sys_open - Open a file (stub)
+ */
+int64_t sys_open(const char *pathname, int flags, int mode) {
+    (void)pathname; (void)flags; (void)mode;
+    /* Requires VFS (Group B) */
+    return -ENOSYS;
+}
+
+/*
+ * sys_close - Close a file descriptor (stub)
+ */
+int64_t sys_close(int fd) {
+    (void)fd;
+    /* Requires VFS (Group B) */
+    return -ENOSYS;
+}
+
+/*
+ * sys_lseek - Reposition file offset (stub)
+ */
+int64_t sys_lseek(int fd, int64_t offset, int whence) {
+    (void)fd; (void)offset; (void)whence;
+    /* Requires VFS (Group B) */
+    return -ENOSYS;
+}
+
+/*
+ * sys_dup - Duplicate a file descriptor (stub)
+ */
+int64_t sys_dup(int oldfd) {
+    (void)oldfd;
+    /* Requires VFS (Group B) */
+    return -ENOSYS;
+}
+
+/*
+ * sys_dup2 - Duplicate a file descriptor to a specific fd (stub)
+ */
+int64_t sys_dup2(int oldfd, int newfd) {
+    (void)oldfd; (void)newfd;
+    /* Requires VFS (Group B) */
+    return -ENOSYS;
 }

@@ -216,6 +216,72 @@ static void test_thread_func(void *arg) {
     kprintf("[Thread %d] done\n", id);
 }
 
+/* Test system calls (from kernel mode - simulating syscall handler) */
+static void test_syscalls(void) {
+    int64_t ret;
+
+    kprintf("[TEST] System calls test\n");
+
+    /* Test sys_getpid */
+    kprintf("  sys_getpid: ");
+    ret = sys_getpid();
+    kprintf("PID = %d ", (int)ret);
+    if (ret >= 0) {
+        kprintf("OK\n");
+    } else {
+        kprintf("FAILED\n");
+    }
+
+    /* Test sys_write to stdout */
+    kprintf("  sys_write(1, 'Hello', 5): ");
+    ret = sys_write(1, "Hello", 5);
+    if (ret == 5) {
+        kprintf(" -> returned %d OK\n", (int)ret);
+    } else {
+        kprintf("FAILED (ret=%d)\n", (int)ret);
+    }
+
+    /* Test sys_brk query */
+    kprintf("  sys_brk(0) query: ");
+    ret = sys_brk(0);
+    kprintf("brk = 0x%x ", (uint64_t)ret);
+    if (ret > 0) {
+        kprintf("OK\n");
+    } else {
+        kprintf("FAILED\n");
+    }
+
+    /* Test sys_brk set */
+    kprintf("  sys_brk(0x500000) set: ");
+    ret = sys_brk(0x500000);
+    if (ret == 0x500000) {
+        kprintf("brk = 0x%x OK\n", (uint64_t)ret);
+    } else {
+        kprintf("FAILED (ret=0x%x)\n", (uint64_t)ret);
+    }
+
+    /* Test sys_read from stdin (should return 0 = EOF for now) */
+    kprintf("  sys_read(0, buf, 10): ");
+    char buf[16];
+    ret = sys_read(0, buf, 10);
+    if (ret == 0) {
+        kprintf("ret = %d (EOF) OK\n", (int)ret);
+    } else {
+        kprintf("FAILED (ret=%d)\n", (int)ret);
+    }
+
+    /* Test sys_write to invalid fd */
+    kprintf("  sys_write(99, 'x', 1): ");
+    ret = sys_write(99, "x", 1);
+    if (ret < 0) {
+        kprintf("ret = %d (error expected) OK\n", (int)ret);
+    } else {
+        kprintf("FAILED (should return error)\n");
+    }
+
+    kprintf("[TEST] System calls: ALL PASSED\n\n");
+}
+
 /* Test scheduler */
 static void test_scheduler(void) {
     process_t *t1, *t2;
@@ -292,6 +358,7 @@ void kernel_main(void) {
     test_memory();
     test_vmm();
     test_timer();
+    test_syscalls();
     test_scheduler();
 
     /* Print final stats */

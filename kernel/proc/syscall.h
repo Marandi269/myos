@@ -17,11 +17,68 @@
 /* EFER bits */
 #define EFER_SCE    (1 << 0)    /* SYSCALL/SYSRET Enable */
 
+/*
+ * System call numbers (Linux-compatible subset)
+ */
+#define SYS_READ        0
+#define SYS_WRITE       1
+#define SYS_OPEN        2
+#define SYS_CLOSE       3
+#define SYS_STAT        4
+#define SYS_FSTAT       5
+#define SYS_LSEEK       8
+#define SYS_MMAP        9
+#define SYS_MPROTECT    10
+#define SYS_MUNMAP      11
+#define SYS_BRK         12
+#define SYS_IOCTL       16
+#define SYS_PIPE        22
+#define SYS_DUP         32
+#define SYS_DUP2        33
+#define SYS_GETPID      39
+#define SYS_FORK        57
+#define SYS_EXECVE      59
+#define SYS_EXIT        60
+#define SYS_WAIT4       61
+#define SYS_KILL        62
+#define SYS_GETCWD      79
+#define SYS_CHDIR       80
+
+#define MAX_SYSCALL     256
+
+/* Error codes */
+#define ENOSYS      38  /* Function not implemented */
+#define EBADF       9   /* Bad file descriptor */
+#define EINVAL      22  /* Invalid argument */
+#define ENOMEM      12  /* Out of memory */
+#define EFAULT      14  /* Bad address */
+
+/* System call handler function type */
+typedef int64_t (*syscall_fn_t)(uint64_t, uint64_t, uint64_t,
+                                 uint64_t, uint64_t, uint64_t);
+
 /* Initialize SYSCALL/SYSRET */
 void syscall_init(void);
 
 /* System call handler (called from assembly) */
 uint64_t syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2,
                          uint64_t arg3, uint64_t arg4, uint64_t arg5);
+
+/* Register a system call handler */
+void syscall_register(int num, syscall_fn_t handler);
+
+/*
+ * Individual system call declarations
+ */
+int64_t sys_read(int fd, char *buf, size_t count);
+int64_t sys_write(int fd, const char *buf, size_t count);
+int64_t sys_open(const char *pathname, int flags, int mode);
+int64_t sys_close(int fd);
+int64_t sys_lseek(int fd, int64_t offset, int whence);
+int64_t sys_brk(uint64_t addr);
+int64_t sys_getpid(void);
+int64_t sys_exit(int status);
+int64_t sys_dup(int oldfd);
+int64_t sys_dup2(int oldfd, int newfd);
 
 #endif /* _SYSCALL_H */
