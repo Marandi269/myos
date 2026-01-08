@@ -137,8 +137,5 @@ char *strrchr(const char *s, int c) {
         }
         s++;
     }
-    if (c == '\0') {
-        return (char *)s;
-    }
-    return (char *)last;
+    return (c == '\0') ? (char *)s : (char *)last;
 }
