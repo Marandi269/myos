@@ -18,8 +18,8 @@
 | 3.5 | 用户态准备 | ✅ 完成 | GDT用户段, TSS, SYSCALL MSR |
 | 4 | 系统调用 | ✅ 完成 | syscall 框架, read/write/brk |
 | 5 | 文件系统 | ✅ 完成 | VFS, ramfs, devfs, stdio |
-| 6 | 用户空间 | 📋 **下一步** | ELF加载器, libc, shell |
-| 7 | IPC | ⏳ 待开始 | 管道, 信号 |
+| 6 | 用户空间 | ✅ 完成 | ELF加载器, libc, shell |
+| 7 | IPC | 📋 **下一步** | 管道, 信号 |
 | 8 | 网络栈 | ⏳ 可选 | TCP/IP |
 | 9 | 高级特性 | ⏳ 可选 | SMP, 线程 |
 

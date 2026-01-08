@@ -378,11 +378,57 @@ $ exit
 
 ## 交付物清单
 
-- [ ] `kernel/proc/elf.c` - ELF 加载器
-- [ ] `libc/` - 用户态 C 库
-- [ ] `userspace/init/` - init 进程
-- [ ] `userspace/shell/` - 简易 shell
-- [ ] `userspace/coreutils/` - 基础工具
-- [ ] `initramfs/` - 初始文件系统
-- [ ] `scripts/mkinitramfs.sh` - 打包脚本
-- [ ] 更新后的 Makefile
+- [x] `kernel/proc/elf.c` - ELF 加载器
+- [x] `kernel/proc/elf.h` - ELF 结构定义
+- [x] `kernel/fs/initramfs.c` - initramfs CPIO 解析
+- [x] `kernel/fs/initramfs.h` - initramfs 接口
+- [x] `libc/` - 用户态 C 库
+  - [x] `include/syscall.h` - 系统调用包装
+  - [x] `include/stdio.h`, `stdlib.h`, `string.h`, `unistd.h` - 标准头文件
+  - [x] `src/crt0.S` - C 运行时入口
+  - [x] `src/string.c` - 字符串函数
+  - [x] `src/stdlib.c` - malloc/free/exit
+  - [x] `src/stdio.c` - printf/puts
+  - [x] `src/unistd.c` - POSIX 系统调用
+  - [x] `src/wait.c` - wait/waitpid
+  - [x] `src/dirent.c` - 目录操作
+- [x] `userspace/init/init.c` - init 进程 (PID 1)
+- [x] `userspace/shell/sh.c` - 简易 shell
+- [x] `userspace/coreutils/` - 基础工具
+  - [x] `echo.c` - 打印参数
+  - [x] `cat.c` - 显示文件内容
+  - [x] `ls.c` - 列出目录
+  - [x] `pwd.c` - 打印当前目录
+  - [x] `mkdir.c` - 创建目录
+  - [x] `hello.c` - 测试程序
+- [x] `initramfs/` - 初始文件系统目录
+- [x] `scripts/mkinitramfs.sh` - 打包脚本
+- [x] 更新后的 Makefile
+
+## 实现状态
+
+| 任务 | 状态 | 说明 |
+|------|------|------|
+| U-07 补充系统调用 | ✅ 完成 | fork, execve, wait4, getcwd, chdir, mkdir, getdents64 |
+| U-01 ELF64 加载器 | ✅ 完成 | 支持静态链接 ET_EXEC/ET_DYN |
+| U-02 最小 libc | ✅ 完成 | printf, malloc, string 等 |
+| U-03 initramfs | ✅ 完成 | CPIO newc 格式 |
+| U-04 init 进程 | ✅ 完成 | PID 1, shell 重生 |
+| U-05 简易 Shell | ✅ 完成 | 内建命令 + 外部命令 |
+| U-06 coreutils | ✅ 完成 | echo, cat, ls, pwd, mkdir |
+
+## 构建说明
+
+```bash
+# 构建用户空间程序
+make userspace
+
+# 生成 initramfs
+make initramfs
+
+# 构建完整系统
+make full
+
+# 运行
+make run
+```

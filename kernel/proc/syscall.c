@@ -8,18 +8,24 @@
 #include "process.h"
 #include "scheduler.h"
 #include "gdt.h"
+#include "user_space.h"
 #include "../lib/kprintf.h"
+#include "../lib/string.h"
 #include "../serial.h"
 #include "../fs/vfs.h"
 #include "../fs/fd.h"
 #include "../fs/stdio.h"
+#include "../mm/pmm.h"
+#include "../mm/vmm.h"
 
 /* Global fd table (for now - should be per-process) */
 static struct fd_table *global_fd_table = NULL;
 
 /* Get the current process's fd table */
 static struct fd_table* get_fd_table(void) {
-    /* TODO: should be current_proc->fd_table */
+    if (current_proc && current_proc->fd_table) {
+        return current_proc->fd_table;
+    }
     return global_fd_table;
 }
 
@@ -43,8 +49,8 @@ extern void syscall_entry(void);
 /* System call table */
 static syscall_fn_t syscall_table[MAX_SYSCALL];
 
-/* Per-process brk value (simplified - global for now) */
-static uint64_t current_brk = 0x400000;  /* Start heap at 4MB */
+/* Default brk value for processes without one set */
+#define DEFAULT_BRK 0x1000000  /* Start heap at 16MB */
 
 /*
  * Default handler for unimplemented syscalls
@@ -86,7 +92,15 @@ void syscall_init(void) {
     syscall_register(SYS_DUP,    (syscall_fn_t)sys_dup);
     syscall_register(SYS_DUP2,   (syscall_fn_t)sys_dup2);
     syscall_register(SYS_GETPID, (syscall_fn_t)sys_getpid);
+    syscall_register(SYS_GETPPID,(syscall_fn_t)sys_getppid);
     syscall_register(SYS_EXIT,   (syscall_fn_t)sys_exit);
+    syscall_register(SYS_FORK,   (syscall_fn_t)sys_fork);
+    syscall_register(SYS_EXECVE, (syscall_fn_t)sys_execve);
+    syscall_register(SYS_WAIT4,  (syscall_fn_t)sys_wait4);
+    syscall_register(SYS_GETCWD, (syscall_fn_t)sys_getcwd);
+    syscall_register(SYS_CHDIR,  (syscall_fn_t)sys_chdir);
+    syscall_register(SYS_MKDIR,  (syscall_fn_t)sys_mkdir);
+    syscall_register(SYS_GETDENTS64, (syscall_fn_t)sys_getdents64);
 
     /*
      * STAR MSR layout:
@@ -211,25 +225,54 @@ int64_t sys_write(int fd, const char *buf, size_t count) {
  * Otherwise, try to set brk to addr and return new brk.
  */
 int64_t sys_brk(uint64_t addr) {
-    uint64_t page_aligned;
+    uint64_t *brk_ptr;
+    uint64_t old_brk, new_brk;
+
+    /* Get process brk pointer */
+    if (current_proc) {
+        brk_ptr = &current_proc->brk;
+        if (*brk_ptr == 0) {
+            *brk_ptr = DEFAULT_BRK;
+        }
+    } else {
+        /* Fallback for kernel context */
+        static uint64_t kernel_brk = DEFAULT_BRK;
+        brk_ptr = &kernel_brk;
+    }
+
+    old_brk = *brk_ptr;
 
     /* Query current brk */
     if (addr == 0) {
-        return (int64_t)current_brk;
+        return (int64_t)old_brk;
     }
 
     /* Set new brk (page-aligned) */
-    page_aligned = (addr + 0xFFF) & ~0xFFFUL;
+    new_brk = (addr + 0xFFF) & ~0xFFFUL;
 
-    /* Simple implementation - just update the value */
-    /* TODO: Actually allocate/deallocate pages */
-    if (page_aligned >= 0x400000 && page_aligned < 0x10000000) {
-        current_brk = page_aligned;
-        return (int64_t)current_brk;
+    /* Validate range */
+    if (new_brk < DEFAULT_BRK || new_brk >= 0x100000000UL) {
+        return (int64_t)old_brk;
     }
 
-    /* Invalid address range */
-    return (int64_t)current_brk;
+    /* Allocate pages if growing */
+    if (new_brk > old_brk && current_proc && current_proc->page_table) {
+        uint64_t page;
+        for (page = (old_brk + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+             page < new_brk;
+             page += PAGE_SIZE) {
+            uint64_t phys = (uint64_t)pmm_alloc_page();
+            if (!phys) {
+                return (int64_t)old_brk;
+            }
+            memset((void *)phys, 0, PAGE_SIZE);
+            vmm_map_page_in(current_proc->page_table, page, phys,
+                           PTE_WRITABLE | PTE_USER);
+        }
+    }
+
+    *brk_ptr = new_brk;
+    return (int64_t)new_brk;
 }
 
 /*
@@ -379,4 +422,322 @@ int64_t sys_dup2(int oldfd, int newfd) {
 
     ret = fd_dup2(table, oldfd, newfd);
     return ret;
+}
+
+/*
+ * sys_getppid - Get parent process ID
+ */
+int64_t sys_getppid(void) {
+    if (current_proc) {
+        return (int64_t)current_proc->ppid;
+    }
+    return 0;
+}
+
+/*
+ * sys_fork - Create a child process
+ *
+ * Returns: 0 to child, child PID to parent, -1 on error
+ */
+int64_t sys_fork(void) {
+    process_t *child;
+    process_t *parent = current_proc;
+
+    if (!parent) {
+        return -EAGAIN;
+    }
+
+    /* Allocate child process */
+    child = process_alloc();
+    if (!child) {
+        kprintf("[FORK] Failed to allocate child process\n");
+        return -EAGAIN;
+    }
+
+    /* Copy process name */
+    strncpy(child->name, parent->name, sizeof(child->name) - 1);
+
+    /* Set parent-child relationship */
+    child->ppid = parent->pid;
+    child->parent = parent;
+
+    /* Add to parent's children list */
+    child->sibling = parent->children;
+    parent->children = child;
+
+    /* Copy file descriptor table */
+    if (parent->fd_table) {
+        child->fd_table = fd_table_clone(parent->fd_table);
+    } else {
+        child->fd_table = fd_table_clone(global_fd_table);
+    }
+
+    /* Copy current working directory */
+    strncpy(child->cwd, parent->cwd, sizeof(child->cwd));
+
+    /* Copy user space attributes */
+    child->is_user = parent->is_user;
+    child->brk = parent->brk;
+    child->user_entry = parent->user_entry;
+    child->user_stack = parent->user_stack;
+
+    /* Create new address space and copy pages (simplified - share for now) */
+    if (parent->page_table) {
+        child->page_table = create_user_address_space();
+        if (!child->page_table) {
+            process_free(child);
+            return -ENOMEM;
+        }
+        /* Copy user stack */
+        setup_user_stack(child);
+    }
+
+    /* Copy kernel context - child returns 0 */
+    if (parent->context) {
+        child->kernel_stack -= sizeof(context_t);
+        child->context = (context_t *)child->kernel_stack;
+        memcpy(child->context, parent->context, sizeof(context_t));
+    }
+
+    /* Make child ready to run */
+    sched_ready(child);
+
+    kprintf("[FORK] Created child PID %d from parent PID %d\n",
+            child->pid, parent->pid);
+
+    /* Return child PID to parent */
+    return child->pid;
+}
+
+/* Forward declaration for ELF loader */
+int elf_exec(const char *path, char *const argv[], char *const envp[]);
+
+/*
+ * sys_execve - Execute a program
+ *
+ * Replaces current process with new executable
+ */
+int64_t sys_execve(const char *pathname, char *const argv[], char *const envp[]) {
+    int ret;
+
+    if (!pathname) {
+        return -EFAULT;
+    }
+
+    /* Check if file exists first */
+    struct inode *inode = vfs_lookup(pathname);
+    if (!inode) {
+        return -ENOENT;
+    }
+    inode_put(inode);
+
+    kprintf("[EXECVE] Executing: %s\n", pathname);
+
+    /* Use ELF loader */
+    ret = elf_exec(pathname, argv, envp);
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* exec doesn't return on success - jump to user mode */
+    /* This will be handled by returning to the syscall return path
+     * with the new context set up */
+
+    return 0;
+}
+
+/*
+ * sys_wait4 - Wait for a child process
+ *
+ * pid: -1 = any child, >0 = specific child
+ * options: WNOHANG (1) = don't block
+ */
+int64_t sys_wait4(int pid, int *status, int options, void *rusage) {
+    process_t *child;
+    int found = 0;
+    int i;
+
+    (void)rusage;
+
+    if (!current_proc) {
+        return -ECHILD;
+    }
+
+    while (1) {
+        /* Search for zombie children */
+        for (i = 0; i < MAX_PROCESSES; i++) {
+            child = &proc_table[i];
+
+            /* Skip if not our child */
+            if (child->state == PROC_UNUSED || child->ppid != current_proc->pid) {
+                continue;
+            }
+
+            found = 1;
+
+            /* Check if this is the child we want */
+            if (pid > 0 && child->pid != (uint32_t)pid) {
+                continue;
+            }
+
+            /* Found a zombie? */
+            if (child->state == PROC_ZOMBIE || child->exited) {
+                int child_pid = child->pid;
+                int exit_code = child->exit_code;
+
+                /* Return status if requested */
+                if (status) {
+                    /* Linux-style status: exit_code << 8 */
+                    *status = (exit_code & 0xFF) << 8;
+                }
+
+                /* Clean up child */
+                process_free(child);
+
+                kprintf("[WAIT] Reaped child PID %d, exit code %d\n",
+                        child_pid, exit_code);
+                return child_pid;
+            }
+        }
+
+        /* No children at all? */
+        if (!found) {
+            return -ECHILD;
+        }
+
+        /* WNOHANG - don't block */
+        if (options & 1) {
+            return 0;
+        }
+
+        /* Block and wait for a child to exit */
+        current_proc->state = PROC_BLOCKED;
+        schedule();
+    }
+}
+
+/*
+ * sys_getcwd - Get current working directory
+ */
+int64_t sys_getcwd(char *buf, size_t size) {
+    const char *cwd;
+
+    if (!buf || size == 0) {
+        return -EINVAL;
+    }
+
+    /* Get cwd from process or use "/" as default */
+    if (current_proc && current_proc->cwd[0]) {
+        cwd = current_proc->cwd;
+    } else {
+        cwd = "/";
+    }
+
+    size_t len = strlen(cwd);
+    if (len + 1 > size) {
+        return -ERANGE;
+    }
+
+    strncpy(buf, cwd, size);
+    return (int64_t)buf;
+}
+
+/*
+ * sys_chdir - Change current working directory
+ */
+int64_t sys_chdir(const char *path) {
+    struct inode *inode;
+
+    if (!path) {
+        return -EFAULT;
+    }
+
+    /* Verify path exists and is a directory */
+    inode = vfs_lookup(path);
+    if (!inode) {
+        return -ENOENT;
+    }
+
+    if (!S_ISDIR(inode->i_mode)) {
+        inode_put(inode);
+        return -ENOTDIR;
+    }
+    inode_put(inode);
+
+    /* Update process cwd */
+    if (current_proc) {
+        strncpy(current_proc->cwd, path, sizeof(current_proc->cwd) - 1);
+        current_proc->cwd[sizeof(current_proc->cwd) - 1] = '\0';
+    }
+
+    return 0;
+}
+
+/*
+ * sys_mkdir - Create a directory
+ */
+int64_t sys_mkdir(const char *pathname, uint32_t mode) {
+    if (!pathname) {
+        return -EFAULT;
+    }
+
+    return vfs_mkdir(pathname, mode);
+}
+
+/*
+ * sys_getdents64 - Get directory entries
+ */
+int64_t sys_getdents64(int fd, void *dirp, size_t count) {
+    struct fd_table *table;
+    struct file *file;
+    struct dirent dirent;
+    struct linux_dirent64 *d;
+    size_t pos = 0;
+    int ret;
+
+    if (!dirp || count == 0) {
+        return -EINVAL;
+    }
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    file = fd_get(table, fd);
+    if (!file) {
+        return -EBADF;
+    }
+
+    if (!file->f_inode || !S_ISDIR(file->f_inode->i_mode)) {
+        return -ENOTDIR;
+    }
+
+    /* Read directory entries */
+    while (pos + sizeof(struct linux_dirent64) + 256 < count) {
+        ret = vfs_readdir(file, &dirent);
+        if (ret <= 0) {
+            break;
+        }
+
+        /* Calculate record length (aligned to 8 bytes) */
+        size_t name_len = strlen(dirent.d_name);
+        size_t reclen = (sizeof(struct linux_dirent64) + name_len + 1 + 7) & ~7;
+
+        if (pos + reclen > count) {
+            break;
+        }
+
+        /* Fill in linux_dirent64 structure */
+        d = (struct linux_dirent64 *)((char *)dirp + pos);
+        d->d_ino = dirent.d_ino;
+        d->d_off = file->f_pos;
+        d->d_reclen = reclen;
+        d->d_type = dirent.d_type;
+        memcpy(d->d_name, dirent.d_name, name_len + 1);
+
+        pos += reclen;
+    }
+
+    return pos;
 }

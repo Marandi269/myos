@@ -1,0 +1,42 @@
+/*
+ * dirent.h - Directory entries
+ */
+
+#ifndef _DIRENT_H
+#define _DIRENT_H
+
+#include <stdint.h>
+#include <stddef.h>
+
+/* Directory entry */
+struct dirent {
+    uint64_t d_ino;
+    int64_t  d_off;
+    uint16_t d_reclen;
+    uint8_t  d_type;
+    char     d_name[256];
+};
+
+/* Directory stream */
+typedef struct {
+    int fd;
+    char buf[1024];
+    size_t buf_pos;
+    size_t buf_end;
+} DIR;
+
+/* Entry types */
+#define DT_UNKNOWN 0
+#define DT_FIFO    1
+#define DT_CHR     2
+#define DT_DIR     4
+#define DT_BLK     6
+#define DT_REG     8
+#define DT_LNK     10
+#define DT_SOCK    12
+
+DIR *opendir(const char *name);
+struct dirent *readdir(DIR *dirp);
+int closedir(DIR *dirp);
+
+#endif /* _DIRENT_H */

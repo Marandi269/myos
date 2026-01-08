@@ -19,7 +19,8 @@ LDFLAGS = -T linker.ld -nostdlib -z max-page-size=0x1000
 ASM_SRCS = kernel/boot.S \
            kernel/proc/switch.S \
            kernel/proc/gdt_asm.S \
-           kernel/proc/syscall_asm.S
+           kernel/proc/syscall_asm.S \
+           kernel/fs/initramfs_data.S
 
 C_SRCS = kernel/main.c \
          kernel/serial.c \
@@ -40,10 +41,12 @@ C_SRCS = kernel/main.c \
          kernel/proc/syscall.c \
          kernel/proc/user_space.c \
          kernel/proc/usermode.c \
+         kernel/proc/elf.c \
          kernel/fs/vfs.c \
          kernel/fs/fd.c \
          kernel/fs/stdio.c \
          kernel/fs/fs.c \
+         kernel/fs/initramfs.c \
          kernel/fs/ramfs/ramfs.c \
          kernel/fs/devfs/devfs.c
 
@@ -53,9 +56,17 @@ C_OBJS = $(C_SRCS:.c=.o)
 OBJS = $(ASM_OBJS) $(C_OBJS)
 
 # 目标
-.PHONY: all clean run debug
+.PHONY: all clean run debug userspace initramfs
 
 all: myos.iso
+
+# Build userspace programs first
+userspace:
+	$(MAKE) -C userspace
+
+# Create initramfs archive
+initramfs: userspace
+	./scripts/mkinitramfs.sh
 
 kernel.bin: $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^
@@ -66,11 +77,23 @@ myos.iso: kernel.bin grub.cfg
 	cp grub.cfg iso/boot/grub/
 	grub-mkrescue -o $@ iso 2>/dev/null
 
+# Build everything including userspace
+full: userspace initramfs all
+
 # 汇编文件编译
 kernel/boot.o: kernel/boot.S
 	$(AS) $(ASFLAGS) -c $< -o $@
 
 kernel/proc/switch.o: kernel/proc/switch.S
+	$(AS) $(ASFLAGS) -c $< -o $@
+
+kernel/proc/gdt_asm.o: kernel/proc/gdt_asm.S
+	$(AS) $(ASFLAGS) -c $< -o $@
+
+kernel/proc/syscall_asm.o: kernel/proc/syscall_asm.S
+	$(AS) $(ASFLAGS) -c $< -o $@
+
+kernel/fs/initramfs_data.o: kernel/fs/initramfs_data.S
 	$(AS) $(ASFLAGS) -c $< -o $@
 
 # C 文件编译
@@ -84,5 +107,7 @@ debug: myos.iso
 	./scripts/debug.sh
 
 clean:
-	rm -rf $(OBJS) kernel.bin myos.iso iso/
+	rm -rf $(OBJS) kernel.bin myos.iso iso/ initramfs.cpio
 	find kernel -name "*.o" -delete
+	$(MAKE) -C userspace clean 2>/dev/null || true
+	$(MAKE) -C libc clean 2>/dev/null || true

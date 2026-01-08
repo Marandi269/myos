@@ -90,8 +90,23 @@ process_t *process_alloc(void) {
     proc->kernel_stack_base = (uint64_t)stack;
     proc->kernel_stack = proc->kernel_stack_base + KERNEL_STACK_SIZE;
 
+    /* Initialize filesystem state */
+    proc->fd_table = NULL;
+    strncpy(proc->cwd, "/", sizeof(proc->cwd));
+
+    /* Initialize process relationships */
+    proc->parent = NULL;
+    proc->children = NULL;
+    proc->sibling = NULL;
+    proc->wait_next = NULL;
+    proc->exited = 0;
+
     return proc;
 }
+
+/* Forward declaration */
+void fd_table_destroy(struct fd_table *table);
+void free_user_address_space(uint64_t *pml4);
 
 /* Free a process */
 void process_free(process_t *proc) {
@@ -103,6 +118,30 @@ void process_free(process_t *proc) {
     if (proc->kernel_stack_base) {
         pmm_free_page((void *)proc->kernel_stack_base);
         pmm_free_page((void *)(proc->kernel_stack_base + PAGE_SIZE));
+    }
+
+    /* Free file descriptor table */
+    if (proc->fd_table) {
+        fd_table_destroy(proc->fd_table);
+        proc->fd_table = NULL;
+    }
+
+    /* Free user address space */
+    if (proc->page_table) {
+        free_user_address_space(proc->page_table);
+        proc->page_table = NULL;
+    }
+
+    /* Remove from parent's children list */
+    if (proc->parent) {
+        process_t **pp = &proc->parent->children;
+        while (*pp) {
+            if (*pp == proc) {
+                *pp = proc->sibling;
+                break;
+            }
+            pp = &(*pp)->sibling;
+        }
     }
 
     /* Clear PCB */

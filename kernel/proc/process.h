@@ -28,6 +28,9 @@ typedef struct {
     uint64_t rip;       /* Return address */
 } __attribute__((packed)) context_t;
 
+/* Forward declaration for fd_table */
+struct fd_table;
+
 /* Process Control Block */
 typedef struct process {
     /* Basic info */
@@ -45,7 +48,12 @@ typedef struct process {
     uint64_t *page_table;       /* Process page table (PML4) */
     uint64_t user_stack;        /* User stack pointer */
     uint64_t user_entry;        /* User code entry point */
+    uint64_t brk;               /* Program break (heap end) */
     int is_user;                /* 1 if user process, 0 if kernel thread */
+
+    /* File system */
+    struct fd_table *fd_table;  /* File descriptor table */
+    char cwd[256];              /* Current working directory */
 
     /* Scheduling info */
     uint32_t priority;          /* Priority level */
@@ -54,11 +62,17 @@ typedef struct process {
 
     /* Process relationships */
     struct process *parent;     /* Parent process */
+    struct process *children;   /* First child process */
+    struct process *sibling;    /* Next sibling */
     struct process *next;       /* Next in queue */
     struct process *prev;       /* Previous in queue */
 
+    /* Wait queue for waitpid */
+    struct process *wait_next;  /* Next in wait queue */
+
     /* Exit status */
     int exit_code;              /* Exit code */
+    int exited;                 /* 1 if process has exited */
 } process_t;
 
 /* Maximum number of processes */
