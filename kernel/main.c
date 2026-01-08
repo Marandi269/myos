@@ -20,6 +20,7 @@
 #include "proc/syscall.h"
 #include "proc/usermode.h"
 #include "fs/fs.h"
+#include "net/net.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
@@ -368,6 +369,14 @@ void kernel_main(void) {
     fs_test();
     test_timer();
     test_syscalls();
+
+    /* Initialize network stack */
+    net_init();
+
+    /* Run network test */
+    net_test();
+
+    /* Scheduler test (will not return once started) */
     test_scheduler();
 
     /* Print final stats */

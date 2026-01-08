@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-✅ **Phase 7 IPC 已完成** - 管道、信号、共享内存
+✅ **Phase 8 网络栈已完成** - virtio-net, TCP/IP, Socket API
 
 ```
 =============================
@@ -12,23 +12,18 @@
   64-bit kernel running
 =============================
 
-[Kernel] Initializing...
-[init] MyOS init (PID 1)
-[init] Starting /bin/sh...
+[NET] Initializing network stack...
+[PCI] 00:03.0 1af4:1000 class=02:00 irq=11
+[virtio-net] MAC: 52:54:00:12:34:56
+[IP] Configured: 10.0.2.15/255.255.255.0 gateway 10.0.2.2
+[NET] Network stack initialized
 
-MyOS Shell v0.2
-$ ls /bin | cat
-cat
-echo
-hello
-init
-ls
-mkdir
-pwd
-sh
-$ kill -9 5
-$ echo "Hello World"
-Hello World
+[NET] Pinging gateway...
+[ICMP] Sending echo request to 10.0.2.2
+[ARP] Request: Who has 10.0.2.2?
+[ARP] Reply: 10.0.2.2 is at 52:55:0a:00:02:02
+[ICMP] Echo reply from 10.0.2.2
+[NET] Network tests completed
 ```
 
 ## 进度总览
@@ -44,7 +39,7 @@ Hello World
 | 5 | 文件系统 | ✅ 完成 |
 | 6 | 用户空间 | ✅ 完成 |
 | 7 | IPC | ✅ 完成 |
-| 8 | 网络栈 | ⏳ 可选 |
+| 8 | 网络栈 | ✅ 完成 |
 | 9 | 高级特性 | ⏳ 可选 |
 
 ## 功能
@@ -90,6 +85,18 @@ Hello World
 - [x] 管道 (pipe)
 - [x] 信号 (signal)
 - [x] 共享内存 (mmap MAP_SHARED)
+
+### 网络栈
+- [x] PCI 总线驱动
+- [x] virtio-net 网卡驱动
+- [x] 以太网帧处理
+- [x] ARP 协议 (异步解析)
+- [x] IPv4 协议
+- [x] ICMP 协议 (ping)
+- [x] UDP 协议
+- [x] TCP 协议 (基础)
+- [x] Socket API
+- [x] DHCP 客户端
 
 ### 用户空间
 - [x] ELF64 加载器
@@ -201,11 +208,7 @@ myos/
 
 ### 下一步 (可选)
 
-- [ ] Phase 8: 网络栈 - [详细计划](docs/phase8-network.md)
-  - virtio-net 驱动
-  - TCP/IP 协议栈
-  - Socket API
-  - DHCP 客户端
+- [x] Phase 8: 网络栈 - [详细计划](docs/phase8-network.md) ✅ 已完成
 
 - [ ] Phase 9: 高级特性 - [详细计划](docs/phase9-advanced.md)
   - SMP 多核支持

@@ -34,6 +34,9 @@ C_SRCS = kernel/main.c \
          kernel/mm/vmm.c \
          kernel/mm/page_fault.c \
          kernel/drivers/pit.c \
+         kernel/drivers/pci.c \
+         kernel/drivers/virtio.c \
+         kernel/drivers/virtio_net.c \
          kernel/proc/process.c \
          kernel/proc/scheduler.c \
          kernel/proc/gdt.c \
@@ -51,7 +54,17 @@ C_SRCS = kernel/main.c \
          kernel/fs/devfs/devfs.c \
          kernel/ipc/pipe.c \
          kernel/ipc/signal.c \
-         kernel/ipc/shm.c
+         kernel/ipc/shm.c \
+         kernel/net/netdev.c \
+         kernel/net/ethernet.c \
+         kernel/net/arp.c \
+         kernel/net/ip.c \
+         kernel/net/icmp.c \
+         kernel/net/udp.c \
+         kernel/net/tcp.c \
+         kernel/net/socket.c \
+         kernel/net/dhcp.c \
+         kernel/net/net.c
 
 # 目标文件
 ASM_OBJS = $(ASM_SRCS:.S=.o)

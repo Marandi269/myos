@@ -15,6 +15,8 @@ fi
 # Run QEMU with serial output to terminal
 # -serial mon:stdio allows serial + QEMU monitor on stdio
 # -display none disables graphical display (headless mode)
+# -netdev user,id=net0 enables user-mode networking
+# -device virtio-net-pci,netdev=net0 adds virtio-net device
 qemu-system-x86_64 \
     -cdrom "$ISO" \
     -serial mon:stdio \
@@ -22,4 +24,6 @@ qemu-system-x86_64 \
     -m 128M \
     -no-reboot \
     -no-shutdown \
+    -netdev user,id=net0 \
+    -device virtio-net-pci,netdev=net0 \
     "$@"
