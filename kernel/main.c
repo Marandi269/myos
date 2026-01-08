@@ -18,6 +18,7 @@
 #include "proc/gdt.h"
 #include "proc/tss.h"
 #include "proc/syscall.h"
+#include "fs/fs.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
 #define DEFAULT_MEMORY_SIZE     (128 * 1024 * 1024)
@@ -345,6 +346,12 @@ void kernel_main(void) {
 
     /* Initialize keyboard driver */
     keyboard_init();
+
+    /* Initialize filesystem (VFS, ramfs, devfs) */
+    fs_init();
+
+    /* Initialize syscall stdio (must be after fs_init) */
+    syscall_init_stdio();
 
     /* Initialize scheduler */
     scheduler_init();

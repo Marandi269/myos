@@ -116,3 +116,26 @@ char *strcat(char *dest, const char *src) {
     while ((*d++ = *src++));
     return dest;
 }
+
+/* Find first occurrence of character in string */
+char *strchr(const char *s, int c) {
+    while (*s) {
+        if (*s == (char)c) {
+            return (char *)s;
+        }
+        s++;
+    }
+    return (c == '\0') ? (char *)s : NULL;
+}
+
+/* Find last occurrence of character in string */
+char *strrchr(const char *s, int c) {
+    const char *last = NULL;
+    while (*s) {
+        if (*s == (char)c) {
+            last = s;
+        }
+        s++;
+    }
+    return (c == '\0') ? (char *)s : (char *)last;
+}

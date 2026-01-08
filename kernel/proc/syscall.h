@@ -60,6 +60,9 @@ typedef int64_t (*syscall_fn_t)(uint64_t, uint64_t, uint64_t,
 /* Initialize SYSCALL/SYSRET */
 void syscall_init(void);
 
+/* Initialize syscall stdio (call after fs_init) */
+void syscall_init_stdio(void);
+
 /* System call handler (called from assembly) */
 uint64_t syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2,
                          uint64_t arg3, uint64_t arg4, uint64_t arg5);

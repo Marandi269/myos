@@ -10,6 +10,18 @@
 #include "gdt.h"
 #include "../lib/kprintf.h"
 #include "../serial.h"
+#include "../fs/vfs.h"
+#include "../fs/fd.h"
+#include "../fs/stdio.h"
+
+/* Global fd table (for now - should be per-process) */
+static struct fd_table *global_fd_table = NULL;
+
+/* Get the current process's fd table */
+static struct fd_table* get_fd_table(void) {
+    /* TODO: should be current_proc->fd_table */
+    return global_fd_table;
+}
 
 /* Read MSR */
 static inline uint64_t rdmsr(uint32_t msr) {
@@ -67,7 +79,12 @@ void syscall_init(void) {
     /* Register implemented syscalls */
     syscall_register(SYS_READ,   (syscall_fn_t)sys_read);
     syscall_register(SYS_WRITE,  (syscall_fn_t)sys_write);
+    syscall_register(SYS_OPEN,   (syscall_fn_t)sys_open);
+    syscall_register(SYS_CLOSE,  (syscall_fn_t)sys_close);
+    syscall_register(SYS_LSEEK,  (syscall_fn_t)sys_lseek);
     syscall_register(SYS_BRK,    (syscall_fn_t)sys_brk);
+    syscall_register(SYS_DUP,    (syscall_fn_t)sys_dup);
+    syscall_register(SYS_DUP2,   (syscall_fn_t)sys_dup2);
     syscall_register(SYS_GETPID, (syscall_fn_t)sys_getpid);
     syscall_register(SYS_EXIT,   (syscall_fn_t)sys_exit);
 
@@ -97,6 +114,26 @@ void syscall_init(void) {
 }
 
 /*
+ * Initialize syscall stdio (call after fs_init)
+ */
+void syscall_init_stdio(void) {
+    /* Create global fd table */
+    global_fd_table = fd_table_create();
+    if (!global_fd_table) {
+        kprintf("[SYSCALL] ERROR: Failed to create fd table\n");
+        return;
+    }
+
+    /* Setup stdio (fd 0, 1, 2 -> /dev/console) */
+    if (setup_stdio(global_fd_table) < 0) {
+        kprintf("[SYSCALL] ERROR: Failed to setup stdio\n");
+        return;
+    }
+
+    kprintf("[SYSCALL] stdio initialized (fd 0,1,2 -> /dev/console)\n");
+}
+
+/*
  * System call dispatcher - called from syscall_entry
  */
 uint64_t syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2,
@@ -113,50 +150,56 @@ uint64_t syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2,
  * sys_read - Read from a file descriptor
  *
  * ssize_t read(int fd, void *buf, size_t count)
- *
- * For now, only supports reading from stdin (fd 0) via keyboard buffer.
- * Returns number of bytes read, or negative error.
  */
 int64_t sys_read(int fd, char *buf, size_t count) {
+    struct fd_table *table;
+    struct file *file;
+    ssize_t ret;
+
     if (!buf) {
         return -EFAULT;
     }
 
-    if (fd == 0) {
-        /* stdin - not implemented yet, return 0 (EOF) */
-        /* TODO: read from keyboard buffer when implemented */
-        return 0;
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
     }
 
-    /* Other fds - not implemented without VFS */
-    return -EBADF;
+    file = fd_get(table, fd);
+    if (!file) {
+        return -EBADF;
+    }
+
+    ret = vfs_read(file, buf, count);
+    return ret;
 }
 
 /*
  * sys_write - Write to a file descriptor
  *
  * ssize_t write(int fd, const void *buf, size_t count)
- *
- * Supports stdout (fd 1) and stderr (fd 2) -> serial output.
- * Returns number of bytes written, or negative error.
  */
 int64_t sys_write(int fd, const char *buf, size_t count) {
-    size_t i;
+    struct fd_table *table;
+    struct file *file;
+    ssize_t ret;
 
     if (!buf) {
         return -EFAULT;
     }
 
-    if (fd == 1 || fd == 2) {
-        /* stdout/stderr -> serial port */
-        for (i = 0; i < count; i++) {
-            serial_putchar(buf[i]);
-        }
-        return (int64_t)count;
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
     }
 
-    /* Other fds - not implemented without VFS */
-    return -EBADF;
+    file = fd_get(table, fd);
+    if (!file) {
+        return -EBADF;
+    }
+
+    ret = vfs_write(file, buf, count);
+    return ret;
 }
 
 /*
@@ -228,46 +271,112 @@ int64_t sys_exit(int status) {
 }
 
 /*
- * sys_open - Open a file (stub)
+ * sys_open - Open a file
+ *
+ * int open(const char *pathname, int flags, mode_t mode)
  */
 int64_t sys_open(const char *pathname, int flags, int mode) {
-    (void)pathname; (void)flags; (void)mode;
-    /* Requires VFS (Group B) */
-    return -ENOSYS;
+    struct fd_table *table;
+    struct file *file;
+    int fd;
+
+    if (!pathname) {
+        return -EFAULT;
+    }
+
+    table = get_fd_table();
+    if (!table) {
+        return -ENOMEM;
+    }
+
+    file = vfs_open(pathname, flags, mode);
+    if (!file) {
+        return -ENOENT;
+    }
+
+    fd = fd_alloc(table, file);
+    if (fd < 0) {
+        vfs_close(file);
+        return -EMFILE;
+    }
+
+    return fd;
 }
 
 /*
- * sys_close - Close a file descriptor (stub)
+ * sys_close - Close a file descriptor
+ *
+ * int close(int fd)
  */
 int64_t sys_close(int fd) {
-    (void)fd;
-    /* Requires VFS (Group B) */
-    return -ENOSYS;
+    struct fd_table *table;
+    int ret;
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    ret = fd_free(table, fd);
+    return ret;
 }
 
 /*
- * sys_lseek - Reposition file offset (stub)
+ * sys_lseek - Reposition file offset
+ *
+ * off_t lseek(int fd, off_t offset, int whence)
  */
 int64_t sys_lseek(int fd, int64_t offset, int whence) {
-    (void)fd; (void)offset; (void)whence;
-    /* Requires VFS (Group B) */
-    return -ENOSYS;
+    struct fd_table *table;
+    struct file *file;
+    int64_t ret;
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    file = fd_get(table, fd);
+    if (!file) {
+        return -EBADF;
+    }
+
+    ret = vfs_lseek(file, offset, whence);
+    return ret;
 }
 
 /*
- * sys_dup - Duplicate a file descriptor (stub)
+ * sys_dup - Duplicate a file descriptor
+ *
+ * int dup(int oldfd)
  */
 int64_t sys_dup(int oldfd) {
-    (void)oldfd;
-    /* Requires VFS (Group B) */
-    return -ENOSYS;
+    struct fd_table *table;
+    int ret;
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    ret = fd_dup(table, oldfd);
+    return ret;
 }
 
 /*
- * sys_dup2 - Duplicate a file descriptor to a specific fd (stub)
+ * sys_dup2 - Duplicate a file descriptor to a specific fd
+ *
+ * int dup2(int oldfd, int newfd)
  */
 int64_t sys_dup2(int oldfd, int newfd) {
-    (void)oldfd; (void)newfd;
-    /* Requires VFS (Group B) */
-    return -ENOSYS;
+    struct fd_table *table;
+    int ret;
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    ret = fd_dup2(table, oldfd, newfd);
+    return ret;
 }
