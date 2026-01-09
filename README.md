@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-✅ **Phase 10 磁盘启动已完成** - IDE/ATA, ext2 读写, 持久化存储
+✅ **Phase 11 I/O多路复用已完成** - 等待队列, poll/select 系统调用
 
 ```
 =============================
@@ -45,6 +45,7 @@
 | 8 | 网络栈 | ✅ 完成 |
 | 9 | 高级特性 | ✅ 完成 |
 | 10 | 磁盘启动 | ✅ 完成 |
+| 11 | I/O多路复用 | ✅ 完成 |
 
 ## 功能
 
@@ -84,6 +85,7 @@
 - [x] getpid/getppid/getcwd/chdir
 - [x] pipe/dup/dup2
 - [x] kill/signal/sigaction
+- [x] poll/select (I/O多路复用)
 
 ### IPC 进程间通信
 - [x] 管道 (pipe)
@@ -235,10 +237,10 @@ myos/
 - [x] Phase 10: 磁盘启动 - [详细计划](docs/phase10-disk.md) ✅ 已完成
   - IDE/ATA, ext2 读写, 持久化存储
 
-- [ ] Phase 11: I/O 多路复用 - [详细计划](docs/phase11-io-multiplexing.md)
-  - 等待队列机制
-  - select/poll 系统调用
-  - epoll (可选)
+- [x] Phase 11: I/O 多路复用 - [详细计划](docs/phase11-io-multiplexing.md) ✅ 已完成
+  - 等待队列机制 (wait_queue)
+  - poll/select 系统调用
+  - 管道/Socket/控制台 poll 支持
 
 ## 许可证
 

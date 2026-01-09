@@ -52,12 +52,15 @@ C_SRCS = kernel/main.c \
          kernel/proc/futex.c \
          kernel/proc/smp.c \
          kernel/proc/dynlink.c \
+         kernel/proc/wait_queue.c \
          kernel/lib/spinlock.c \
          kernel/fs/vfs.c \
          kernel/fs/fd.c \
          kernel/fs/stdio.c \
          kernel/fs/fs.c \
          kernel/fs/initramfs.c \
+         kernel/fs/poll.c \
+         kernel/fs/select.c \
          kernel/fs/ramfs/ramfs.c \
          kernel/fs/devfs/devfs.c \
          kernel/ipc/pipe.c \

@@ -6,6 +6,10 @@
 #define _SOCKET_H
 
 #include "types.h"
+#include "proc/wait_queue.h"
+
+/* Forward declaration for poll_table */
+struct poll_table;
 
 /* Address families */
 #define AF_UNSPEC   0
@@ -92,6 +96,11 @@ typedef struct socket {
 
     /* Blocking mode */
     bool blocking;
+
+    /* Wait queues for poll/select support */
+    wait_queue_head_t recv_wait;    /* Processes waiting to receive */
+    wait_queue_head_t send_wait;    /* Processes waiting to send */
+    wait_queue_head_t accept_wait;  /* Processes waiting to accept */
 } socket_t;
 
 /* Socket states */
@@ -125,5 +134,15 @@ uint16_t socket_htons(uint16_t hostshort);
 uint16_t socket_ntohs(uint16_t netshort);
 uint32_t socket_htonl(uint32_t hostlong);
 uint32_t socket_ntohl(uint32_t netlong);
+
+/* Poll support */
+unsigned int socket_poll(int sockfd, struct poll_table *pt);
+
+/* Get socket by fd (for poll support) */
+socket_t *socket_get_by_fd(int fd);
+
+/* Wake up waiters on socket (called when data arrives) */
+void socket_wakeup_recv(socket_t *sock);
+void socket_wakeup_send(socket_t *sock);
 
 #endif /* _SOCKET_H */

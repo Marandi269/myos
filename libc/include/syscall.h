@@ -40,6 +40,12 @@
 #define SYS_SET_TID_ADDRESS 218
 #define SYS_ARCH_PRCTL  158
 
+/* I/O Multiplexing syscalls */
+#define SYS_poll        7
+#define SYS_select      23
+#define SYS_pselect6    270
+#define SYS_ppoll       271
+
 /* Inline syscall wrappers */
 static inline long syscall0(long num) {
     long ret;

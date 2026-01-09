@@ -7,6 +7,7 @@
 
 #include "types.h"
 #include "fs/vfs.h"
+#include "proc/wait_queue.h"
 
 /* Pipe buffer size */
 #define PIPE_BUF_SIZE 4096
@@ -21,6 +22,10 @@ typedef struct pipe {
     int writers;            /* Number of write end references */
     int read_closed;        /* Read end is closed */
     int write_closed;       /* Write end is closed */
+
+    /* Wait queues for poll/select support */
+    wait_queue_head_t read_wait;   /* Processes waiting to read */
+    wait_queue_head_t write_wait;  /* Processes waiting to write */
 } pipe_t;
 
 /* Pipe file operations */

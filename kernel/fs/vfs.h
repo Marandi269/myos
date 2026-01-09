@@ -124,6 +124,9 @@ struct inode_operations {
                   struct inode *new_dir, const char *new_name);
 };
 
+/* Forward declaration for poll_table */
+struct poll_table;
+
 /* File operations */
 struct file_operations {
     int (*open)(struct inode *inode, struct file *file);
@@ -133,6 +136,7 @@ struct file_operations {
     int64_t (*lseek)(struct file *file, int64_t offset, int whence);
     int (*readdir)(struct file *file, struct dirent *dirent);
     int (*ioctl)(struct file *file, unsigned int cmd, unsigned long arg);
+    unsigned int (*poll)(struct file *file, struct poll_table *pt);
 };
 
 /* Open file structure */

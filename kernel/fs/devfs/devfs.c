@@ -7,6 +7,8 @@
 #include "../../lib/kprintf.h"
 #include "../../lib/string.h"
 #include "../../serial.h"
+#include "../poll.h"
+#include "../../proc/wait_queue.h"
 
 /* Device entry in devfs */
 struct dev_entry {
@@ -32,14 +34,20 @@ static void devfs_umount(struct super_block *sb);
 /* /dev/null operations */
 static ssize_t null_read(struct file *file, char *buf, size_t count);
 static ssize_t null_write(struct file *file, const char *buf, size_t count);
+static unsigned int null_poll(struct file *file, struct poll_table *pt);
 
 /* /dev/zero operations */
 static ssize_t zero_read(struct file *file, char *buf, size_t count);
 static ssize_t zero_write(struct file *file, const char *buf, size_t count);
+static unsigned int zero_poll(struct file *file, struct poll_table *pt);
 
 /* /dev/console operations */
 static ssize_t console_read(struct file *file, char *buf, size_t count);
 static ssize_t console_write(struct file *file, const char *buf, size_t count);
+static unsigned int console_poll(struct file *file, struct poll_table *pt);
+
+/* Console wait queue for poll support */
+static wait_queue_head_t console_read_wq = WAIT_QUEUE_HEAD_INIT;
 
 /* Inode operations for devfs root */
 static struct inode_operations devfs_root_inode_ops = {
@@ -71,6 +79,7 @@ static struct file_operations null_ops = {
     .lseek = NULL,
     .readdir = NULL,
     .ioctl = NULL,
+    .poll = null_poll,
 };
 
 /* /dev/zero operations */
@@ -82,6 +91,7 @@ static struct file_operations zero_ops = {
     .lseek = NULL,
     .readdir = NULL,
     .ioctl = NULL,
+    .poll = zero_poll,
 };
 
 /* /dev/console operations */
@@ -93,6 +103,7 @@ static struct file_operations console_ops = {
     .lseek = NULL,
     .readdir = NULL,
     .ioctl = NULL,
+    .poll = console_poll,
 };
 
 /* Filesystem type */
@@ -144,6 +155,24 @@ static ssize_t zero_write(struct file *file, const char *buf, size_t count) {
 }
 
 /*
+ * /dev/null - poll always ready for read (EOF) and write
+ */
+static unsigned int null_poll(struct file *file, struct poll_table *pt) {
+    (void)file;
+    (void)pt;
+    return POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM;
+}
+
+/*
+ * /dev/zero - poll always ready for read and write
+ */
+static unsigned int zero_poll(struct file *file, struct poll_table *pt) {
+    (void)file;
+    (void)pt;
+    return POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM;
+}
+
+/*
  * /dev/console - read from serial (blocking read not implemented yet)
  */
 static ssize_t console_read(struct file *file, char *buf, size_t count) {
@@ -169,6 +198,34 @@ static ssize_t console_write(struct file *file, const char *buf, size_t count) {
     }
 
     return count;
+}
+
+/*
+ * /dev/console - poll for events
+ * Console is always writable, but reading depends on keyboard input
+ */
+static unsigned int console_poll(struct file *file, struct poll_table *pt) {
+    unsigned int mask = POLLOUT | POLLWRNORM;  /* Always writable */
+
+    (void)file;
+
+    /* Register with console read wait queue */
+    if (pt) {
+        poll_wait(file, &console_read_wq, (poll_table_t *)pt);
+    }
+
+    /* TODO: Check if keyboard input is available
+     * For now, just return writable only since we don't have keyboard buffer */
+
+    return mask;
+}
+
+/*
+ * Wake up processes waiting to read from console
+ * Call this when keyboard input is available
+ */
+void console_input_available(void) {
+    wake_up_all(&console_read_wq);
 }
 
 /*

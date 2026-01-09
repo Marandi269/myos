@@ -10,6 +10,7 @@
 #include "mm/heap.h"
 #include "lib/kprintf.h"
 #include "lib/string.h"
+#include "fs/poll.h"
 
 /* Socket table */
 static socket_t sockets[SOCKET_MAX];
@@ -63,6 +64,9 @@ static void socket_udp_callback(uint32_t src_ip, uint16_t src_port,
 
             sock->last_src_addr = src_ip;
             sock->last_src_port = src_port;
+
+            /* Wake up any processes waiting to receive */
+            wake_up_all(&sock->recv_wait);
             return;
         }
     }
@@ -83,6 +87,11 @@ static socket_t *socket_get(int fd) {
     return &sockets[fd];
 }
 
+/* Public function to get socket by fd (for poll support) */
+socket_t *socket_get_by_fd(int fd) {
+    return socket_get(fd);
+}
+
 /* Allocate socket */
 static int socket_alloc(void) {
     for (int i = 0; i < SOCKET_MAX; i++) {
@@ -90,6 +99,10 @@ static int socket_alloc(void) {
             memset(&sockets[i], 0, sizeof(socket_t));
             sockets[i].active = true;
             sockets[i].blocking = true;
+            /* Initialize wait queues */
+            init_waitqueue_head(&sockets[i].recv_wait);
+            init_waitqueue_head(&sockets[i].send_wait);
+            init_waitqueue_head(&sockets[i].accept_wait);
             return i;
         }
     }
@@ -385,6 +398,80 @@ int sys_closesocket(int sockfd) {
         kfree(sock->recv_buf);
     }
 
+    /* Wake up any waiters before closing */
+    wake_up_all(&sock->recv_wait);
+    wake_up_all(&sock->send_wait);
+    wake_up_all(&sock->accept_wait);
+
     sock->active = false;
     return 0;
+}
+
+/*
+ * Poll a socket for events
+ * Returns events that are ready
+ */
+unsigned int socket_poll(int sockfd, struct poll_table *pt) {
+    socket_t *sock = socket_get(sockfd);
+    unsigned int mask = 0;
+
+    if (!sock) {
+        return POLLNVAL;
+    }
+
+    /* Register with wait queues */
+    if (pt) {
+        poll_wait(NULL, &sock->recv_wait, (poll_table_t *)pt);
+        poll_wait(NULL, &sock->send_wait, (poll_table_t *)pt);
+    }
+
+    /* Check for readable data */
+    if (sock->type == SOCK_DGRAM) {
+        /* UDP: check receive buffer */
+        if (sock->recv_buf && sock->recv_tail > sock->recv_head) {
+            mask |= POLLIN | POLLRDNORM;
+        }
+    } else if (sock->type == SOCK_STREAM) {
+        /* TCP: check connection state and receive buffer */
+        if (sock->tcp_conn) {
+            /* Simplified: assume readable if connected */
+            if (sock->state == SOCKET_CONNECTED) {
+                mask |= POLLIN | POLLRDNORM;
+            }
+        }
+        /* Check for connection accepted (listening socket) */
+        if (sock->listening) {
+            /* TODO: check for pending connections */
+        }
+    }
+
+    /* Check for writable (can send) */
+    if (sock->state == SOCKET_CONNECTED || sock->type == SOCK_DGRAM) {
+        mask |= POLLOUT | POLLWRNORM;  /* Simplified: assume always writable */
+    }
+
+    /* Check for errors/hangup */
+    if (!sock->active) {
+        mask |= POLLHUP;
+    }
+
+    return mask;
+}
+
+/*
+ * Wake up processes waiting to receive on a socket
+ */
+void socket_wakeup_recv(socket_t *sock) {
+    if (sock) {
+        wake_up_all(&sock->recv_wait);
+    }
+}
+
+/*
+ * Wake up processes waiting to send on a socket
+ */
+void socket_wakeup_send(socket_t *sock) {
+    if (sock) {
+        wake_up_all(&sock->send_wait);
+    }
 }

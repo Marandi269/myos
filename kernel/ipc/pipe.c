@@ -2,7 +2,7 @@
  * pipe.c - Pipe IPC implementation
  *
  * Implements anonymous pipes for parent-child process communication.
- * Uses a circular buffer with blocking semantics.
+ * Uses a circular buffer with blocking semantics and poll/select support.
  */
 
 #include "pipe.h"
@@ -10,6 +10,7 @@
 #include "../lib/kprintf.h"
 #include "../lib/string.h"
 #include "../fs/fd.h"
+#include "../fs/poll.h"
 #include "../proc/process.h"
 #include "../proc/scheduler.h"
 #include "../proc/syscall.h"
@@ -19,6 +20,8 @@ static ssize_t pipe_file_read(struct file *file, char *buf, size_t count);
 static ssize_t pipe_file_write(struct file *file, const char *buf, size_t count);
 static int pipe_read_release(struct file *file);
 static int pipe_write_release(struct file *file);
+static unsigned int pipe_read_poll(struct file *file, struct poll_table *pt);
+static unsigned int pipe_write_poll(struct file *file, struct poll_table *pt);
 
 /* File operations for pipe read end */
 struct file_operations pipe_read_fops = {
@@ -29,6 +32,7 @@ struct file_operations pipe_read_fops = {
     .lseek = NULL,
     .readdir = NULL,
     .ioctl = NULL,
+    .poll = pipe_read_poll,
 };
 
 /* File operations for pipe write end */
@@ -40,6 +44,7 @@ struct file_operations pipe_write_fops = {
     .lseek = NULL,
     .readdir = NULL,
     .ioctl = NULL,
+    .poll = pipe_write_poll,
 };
 
 /*
@@ -58,6 +63,10 @@ pipe_t *pipe_create(void) {
     pipe->writers = 1;
     pipe->read_closed = 0;
     pipe->write_closed = 0;
+
+    /* Initialize wait queues for poll/select support */
+    init_waitqueue_head(&pipe->read_wait);
+    init_waitqueue_head(&pipe->write_wait);
 
     return pipe;
 }
@@ -104,14 +113,23 @@ static ssize_t pipe_file_read(struct file *file, char *buf, size_t count) {
                 break;
             }
 
-            /* Block waiting for data (simplified - just yield) */
-            /* In a full implementation, we would add to a wait queue */
+            /* Block waiting for data using wait queue */
             if (current_proc) {
-                yield();
+                wait_queue_entry_t entry;
+                init_waitqueue_entry(&entry);
+                add_wait_queue(&pipe->read_wait, &entry);
+                current_proc->state = PROC_BLOCKED;
+                schedule();
+                remove_wait_queue(&pipe->read_wait, &entry);
             } else {
                 break;  /* Can't block in kernel context */
             }
         }
+    }
+
+    /* Wake up any writers waiting for buffer space */
+    if (bytes_read > 0) {
+        wake_up_all(&pipe->write_wait);
     }
 
     return bytes_read;
@@ -152,9 +170,14 @@ static ssize_t pipe_file_write(struct file *file, const char *buf, size_t count)
                 break;
             }
 
-            /* Block waiting for space (simplified - just yield) */
+            /* Block waiting for space using wait queue */
             if (current_proc) {
-                yield();
+                wait_queue_entry_t entry;
+                init_waitqueue_entry(&entry);
+                add_wait_queue(&pipe->write_wait, &entry);
+                current_proc->state = PROC_BLOCKED;
+                schedule();
+                remove_wait_queue(&pipe->write_wait, &entry);
             } else {
                 break;
             }
@@ -167,6 +190,11 @@ static ssize_t pipe_file_write(struct file *file, const char *buf, size_t count)
             }
             return -EPIPE;
         }
+    }
+
+    /* Wake up any readers waiting for data */
+    if (bytes_written > 0) {
+        wake_up_all(&pipe->read_wait);
     }
 
     return bytes_written;
@@ -192,6 +220,9 @@ static int pipe_read_release(struct file *file) {
     pipe->read_closed = (pipe->readers == 0);
 
     kprintf("[PIPE] Read end closed (readers=%d)\n", pipe->readers);
+
+    /* Wake up any writers - they will get EPIPE */
+    wake_up_all(&pipe->write_wait);
 
     /* Check if both ends are closed */
     should_destroy = (pipe->readers == 0 && pipe->writers == 0);
@@ -226,6 +257,9 @@ static int pipe_write_release(struct file *file) {
 
     kprintf("[PIPE] Write end closed (writers=%d)\n", pipe->writers);
 
+    /* Wake up any readers - they will get EOF */
+    wake_up_all(&pipe->read_wait);
+
     /* Check if both ends are closed */
     should_destroy = (pipe->readers == 0 && pipe->writers == 0);
 
@@ -236,6 +270,73 @@ static int pipe_write_release(struct file *file) {
 
     file->f_private = NULL;
     return 0;
+}
+
+/*
+ * Poll read end of pipe
+ * Returns events that are ready
+ */
+static unsigned int pipe_read_poll(struct file *file, struct poll_table *pt) {
+    pipe_t *pipe;
+    unsigned int mask = 0;
+
+    if (!file || !file->f_private) {
+        return POLLNVAL;
+    }
+
+    pipe = (pipe_t *)file->f_private;
+
+    /* Register with wait queue */
+    if (pt) {
+        poll_wait(file, &pipe->read_wait, (poll_table_t *)pt);
+    }
+
+    /* Check if readable */
+    if (pipe->count > 0) {
+        mask |= POLLIN | POLLRDNORM;  /* Data available */
+    }
+
+    /* Check if write end closed (EOF) */
+    if (pipe->write_closed || pipe->writers == 0) {
+        mask |= POLLHUP;
+        if (pipe->count == 0) {
+            mask |= POLLIN;  /* Read will return 0 (EOF) */
+        }
+    }
+
+    return mask;
+}
+
+/*
+ * Poll write end of pipe
+ * Returns events that are ready
+ */
+static unsigned int pipe_write_poll(struct file *file, struct poll_table *pt) {
+    pipe_t *pipe;
+    unsigned int mask = 0;
+
+    if (!file || !file->f_private) {
+        return POLLNVAL;
+    }
+
+    pipe = (pipe_t *)file->f_private;
+
+    /* Register with wait queue */
+    if (pt) {
+        poll_wait(file, &pipe->write_wait, (poll_table_t *)pt);
+    }
+
+    /* Check if writable */
+    if (pipe->count < PIPE_BUF_SIZE) {
+        mask |= POLLOUT | POLLWRNORM;  /* Space available */
+    }
+
+    /* Check if read end closed (EPIPE) */
+    if (pipe->read_closed || pipe->readers == 0) {
+        mask |= POLLERR;  /* Write will fail with EPIPE */
+    }
+
+    return mask;
 }
 
 /*

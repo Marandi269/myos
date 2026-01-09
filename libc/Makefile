@@ -20,7 +20,8 @@ C_SRCS = src/string.c \
          src/signal.c \
          src/mman.c \
          src/pipe.c \
-         src/pthread.c
+         src/pthread.c \
+         src/select.c
 
 ASM_SRCS = src/crt0.S
 

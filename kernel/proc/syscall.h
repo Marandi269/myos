@@ -55,6 +55,12 @@
 #define SYS_SET_TID_ADDRESS 218
 #define SYS_ARCH_PRCTL  158
 
+/* I/O Multiplexing syscalls */
+#define SYS_SELECT      23
+#define SYS_POLL        7
+#define SYS_PSELECT6    270
+#define SYS_PPOLL       271
+
 #define MAX_SYSCALL     256
 
 /* Error codes */
@@ -127,5 +133,66 @@ struct linux_dirent64 {
     uint8_t  d_type;
     char     d_name[];
 };
+
+/*
+ * I/O Multiplexing data structures
+ */
+
+/* fd_set for select() */
+#define FD_SETSIZE 256
+
+typedef struct {
+    unsigned long fds_bits[FD_SETSIZE / (8 * sizeof(unsigned long))];
+} fd_set;
+
+/* fd_set manipulation macros */
+#define __FDELT(fd)     ((fd) / (8 * sizeof(unsigned long)))
+#define __FDMASK(fd)    (1UL << ((fd) % (8 * sizeof(unsigned long))))
+
+#define FD_ZERO(set)    do { \
+    unsigned int __i; \
+    for (__i = 0; __i < sizeof((set)->fds_bits)/sizeof((set)->fds_bits[0]); __i++) \
+        (set)->fds_bits[__i] = 0; \
+} while (0)
+
+#define FD_SET(fd, set)   ((set)->fds_bits[__FDELT(fd)] |= __FDMASK(fd))
+#define FD_CLR(fd, set)   ((set)->fds_bits[__FDELT(fd)] &= ~__FDMASK(fd))
+#define FD_ISSET(fd, set) (((set)->fds_bits[__FDELT(fd)] & __FDMASK(fd)) != 0)
+
+/* timeval structure for select() */
+struct timeval {
+    int64_t tv_sec;     /* Seconds */
+    int64_t tv_usec;    /* Microseconds */
+};
+
+/* timespec structure for pselect()/ppoll() */
+struct timespec {
+    int64_t tv_sec;     /* Seconds */
+    int64_t tv_nsec;    /* Nanoseconds */
+};
+
+/* pollfd structure for poll() */
+struct pollfd {
+    int   fd;           /* File descriptor */
+    short events;       /* Requested events */
+    short revents;      /* Returned events */
+};
+
+/* Poll event flags */
+#define POLLIN      0x0001
+#define POLLPRI     0x0002
+#define POLLOUT     0x0004
+#define POLLERR     0x0008
+#define POLLHUP     0x0010
+#define POLLNVAL    0x0020
+#define POLLRDNORM  0x0040
+#define POLLRDBAND  0x0080
+#define POLLWRNORM  0x0100
+#define POLLWRBAND  0x0200
+
+/* I/O Multiplexing syscall declarations */
+int64_t sys_poll(struct pollfd *fds, uint64_t nfds, int timeout);
+int64_t sys_select(int nfds, fd_set *readfds, fd_set *writefds,
+                   fd_set *exceptfds, struct timeval *timeout);
 
 #endif /* _SYSCALL_H */

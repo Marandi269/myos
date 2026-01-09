@@ -22,6 +22,7 @@
 #include "../ipc/shm.h"
 #include "clone.h"
 #include "futex.h"
+#include "../fs/poll.h"
 
 /* Global fd table (for now - should be per-process) */
 struct fd_table *global_fd_table = NULL;
@@ -122,6 +123,10 @@ void syscall_init(void) {
     syscall_register(SYS_FUTEX,  (syscall_fn_t)sys_futex);
     syscall_register(SYS_SET_TID_ADDRESS, (syscall_fn_t)sys_set_tid_address);
     syscall_register(SYS_ARCH_PRCTL, (syscall_fn_t)sys_arch_prctl);
+
+    /* I/O Multiplexing syscalls */
+    syscall_register(SYS_POLL,   (syscall_fn_t)sys_poll);
+    syscall_register(SYS_SELECT, (syscall_fn_t)sys_select);
 
     /*
      * STAR MSR layout:
