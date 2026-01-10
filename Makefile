@@ -96,15 +96,18 @@ OBJS = $(ASM_OBJS) $(C_OBJS)
 .PHONY: all clean run debug userspace initramfs disk run-disk run-disk-virtio debug-disk \
         hybrid usb run-ahci run-acpi test-physical
 
-all: myos.iso
+all: initramfs.cpio myos.iso
 
 # Build userspace programs first
 userspace:
 	$(MAKE) -C userspace
 
 # Create initramfs archive
-initramfs: userspace
+initramfs.cpio: userspace
 	./scripts/mkinitramfs.sh
+
+# Alias for backwards compatibility
+initramfs: initramfs.cpio
 
 kernel.bin: $(OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^
@@ -134,7 +137,7 @@ kernel/proc/syscall_asm.o: kernel/proc/syscall_asm.S
 kernel/proc/ap_trampoline.o: kernel/proc/ap_trampoline.S
 	$(AS) $(ASFLAGS) -c $< -o $@
 
-kernel/fs/initramfs_data.o: kernel/fs/initramfs_data.S
+kernel/fs/initramfs_data.o: kernel/fs/initramfs_data.S initramfs.cpio
 	$(AS) $(ASFLAGS) -c $< -o $@
 
 # C 文件编译
