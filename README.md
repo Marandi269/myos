@@ -131,26 +131,27 @@
 
 ```bash
 # Ubuntu/Debian
-sudo apt install build-essential grub-pc-bin grub-common xorriso qemu-system-x86
+sudo apt install build-essential grub-pc-bin xorriso mtools qemu-system-x86
 
 # Arch Linux
-sudo pacman -S base-devel grub xorriso qemu
+sudo pacman -S base-devel grub xorriso mtools qemu
 ```
 
 ### 构建与运行
 
 ```bash
-# 构建完整系统 (内核 + 用户空间 + initramfs)
-make full
+# 克隆并构建
+git clone https://github.com/Marandi269/myos.git
+cd myos
+make        # 自动编译 userspace + initramfs + kernel
+make run    # 启动 QEMU
+```
 
-# 运行
-make run
-
-# 或者分步构建
-make clean
-make userspace    # 构建用户空间程序
-make initramfs    # 生成 initramfs
-make              # 构建内核
+预期输出：
+```
+MyOS Shell v0.2
+Type 'help' for available commands.
+$
 ```
 
 按 `Ctrl+A` 然后 `X` 退出 QEMU。
