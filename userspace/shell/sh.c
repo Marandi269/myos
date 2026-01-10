@@ -300,9 +300,15 @@ static char *read_line(char *buf, int size) {
 
     while (i < size - 1) {
         c = getchar();
-        if (c == EOF || c == '\n') {
+        if (c == EOF) {
+            /* No input available - wait and retry */
+            /* Small delay to avoid busy loop */
+            for (volatile int j = 0; j < 100000; j++);
+            continue;
+        }
+        if (c == '\n') {
             buf[i] = '\0';
-            return (i > 0 || c == '\n') ? buf : NULL;
+            return buf;
         }
         buf[i++] = c;
     }
