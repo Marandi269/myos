@@ -31,35 +31,35 @@ dirs:
 libc:
 	$(MAKE) -C $(LIBC_DIR)
 
-init: init/init.c $(LIBC) $(CRT0)
+init: dirs init/init.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c init/init.c -o init/init.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/init $(CRT0) init/init.o $(LIBC)
 
-sh: shell/sh.c $(LIBC) $(CRT0)
+sh: dirs shell/sh.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c shell/sh.c -o shell/sh.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/sh $(CRT0) shell/sh.o $(LIBC)
 
-echo: coreutils/echo.c $(LIBC) $(CRT0)
+echo: dirs coreutils/echo.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c coreutils/echo.c -o coreutils/echo.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/echo $(CRT0) coreutils/echo.o $(LIBC)
 
-cat: coreutils/cat.c $(LIBC) $(CRT0)
+cat: dirs coreutils/cat.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c coreutils/cat.c -o coreutils/cat.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/cat $(CRT0) coreutils/cat.o $(LIBC)
 
-ls: coreutils/ls.c $(LIBC) $(CRT0)
+ls: dirs coreutils/ls.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c coreutils/ls.c -o coreutils/ls.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/ls $(CRT0) coreutils/ls.o $(LIBC)
 
-pwd: coreutils/pwd.c $(LIBC) $(CRT0)
+pwd: dirs coreutils/pwd.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c coreutils/pwd.c -o coreutils/pwd.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/pwd $(CRT0) coreutils/pwd.o $(LIBC)
 
-mkdir: coreutils/mkdir.c $(LIBC) $(CRT0)
+mkdir: dirs coreutils/mkdir.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c coreutils/mkdir.c -o coreutils/mkdir.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/mkdir $(CRT0) coreutils/mkdir.o $(LIBC)
 
-hello: coreutils/hello.c $(LIBC) $(CRT0)
+hello: dirs coreutils/hello.c $(LIBC) $(CRT0)
 	$(CC) $(CFLAGS) -c coreutils/hello.c -o coreutils/hello.o
 	$(LD) $(LDFLAGS) -o $(BIN_DIR)/hello $(CRT0) coreutils/hello.o $(LIBC)
 
