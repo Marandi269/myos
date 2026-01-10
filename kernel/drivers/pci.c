@@ -174,6 +174,29 @@ pci_device_t *pci_find_device(uint16_t vendor_id, uint16_t device_id) {
     return NULL;
 }
 
+/* Find device by class/subclass */
+pci_device_t *pci_find_class(uint8_t class_code, uint8_t subclass) {
+    for (int i = 0; i < pci_device_count; i++) {
+        if (pci_devices[i].class_code == class_code &&
+            pci_devices[i].subclass == subclass) {
+            return &pci_devices[i];
+        }
+    }
+    return NULL;
+}
+
+/* Find device by class/subclass/prog_if */
+pci_device_t *pci_find_class_prog(uint8_t class_code, uint8_t subclass, uint8_t prog_if) {
+    for (int i = 0; i < pci_device_count; i++) {
+        if (pci_devices[i].class_code == class_code &&
+            pci_devices[i].subclass == subclass &&
+            pci_devices[i].prog_if == prog_if) {
+            return &pci_devices[i];
+        }
+    }
+    return NULL;
+}
+
 /* Get device BAR address */
 uint32_t pci_get_bar(pci_device_t *dev, int bar_num) {
     if (bar_num < 0 || bar_num > 5) {

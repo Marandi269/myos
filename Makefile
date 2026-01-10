@@ -53,6 +53,8 @@ C_SRCS = kernel/main.c \
          kernel/proc/smp.c \
          kernel/proc/dynlink.c \
          kernel/proc/wait_queue.c \
+         kernel/proc/syscall_fs.c \
+         kernel/proc/syscall_misc.c \
          kernel/lib/spinlock.c \
          kernel/fs/vfs.c \
          kernel/fs/fd.c \
@@ -80,6 +82,8 @@ C_SRCS = kernel/main.c \
          kernel/drivers/usb/xhci.c \
          kernel/drivers/usb/hid.c \
          kernel/drivers/ide.c \
+         kernel/drivers/ahci.c \
+         kernel/drivers/acpi.c \
          kernel/fs/ext2/ext2.c \
          kernel/fs/pivot_root.c
 
@@ -89,7 +93,8 @@ C_OBJS = $(C_SRCS:.c=.o)
 OBJS = $(ASM_OBJS) $(C_OBJS)
 
 # 目标
-.PHONY: all clean run debug userspace initramfs disk run-disk run-disk-virtio debug-disk
+.PHONY: all clean run debug userspace initramfs disk run-disk run-disk-virtio debug-disk \
+        hybrid usb run-ahci run-acpi test-physical
 
 all: myos.iso
 
@@ -172,6 +177,49 @@ debug-disk: disk
 		-nographic \
 		-no-reboot \
 		-s -S
+
+# Create hybrid ISO (bootable from USB and CD)
+hybrid: myos.iso
+	./scripts/make_hybrid_iso.sh
+
+# Create bootable USB (requires DEVICE=)
+usb: myos.iso
+	@if [ -z "$(DEVICE)" ]; then \
+		echo "Usage: make usb DEVICE=/dev/sdX"; \
+		echo ""; \
+		echo "Available devices:"; \
+		lsblk -d -o NAME,SIZE,MODEL 2>/dev/null | grep -v loop || true; \
+		exit 1; \
+	fi
+	sudo ./scripts/make_usb.sh $(DEVICE)
+
+# Run with AHCI disk controller (for testing AHCI driver)
+# Uses Q35 machine type which has native AHCI support
+run-ahci: myos.iso
+	@if [ ! -f ahci_test.img ]; then \
+		qemu-img create -f raw ahci_test.img 128M; \
+	fi
+	qemu-system-x86_64 \
+		-M q35 \
+		-m 128M \
+		-drive file=ahci_test.img,format=raw,if=virtio \
+		-cdrom myos.iso \
+		-boot d \
+		-serial mon:stdio \
+		-display none \
+		-no-reboot
+
+# Test poweroff/reboot via ACPI
+run-acpi: myos.iso
+	qemu-system-x86_64 \
+		-cdrom myos.iso \
+		-nographic \
+		-no-reboot \
+		-no-shutdown
+
+# Physical hardware test guide
+test-physical:
+	./scripts/test_physical.sh
 
 clean:
 	rm -rf $(OBJS) kernel.bin myos.iso iso/ initramfs.cpio myos.img

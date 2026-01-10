@@ -159,14 +159,17 @@ setup_page_tables:
     or $0x03, %eax                  /* Present + Writable */
     mov %eax, (%edi)
 
-    /* PD[0] -> 2MB huge page at 0x0 */
+    /* Map first 1GB (512 x 2MB huge pages) */
     mov $pd, %edi
-    mov $0x83, %eax                 /* Present + Writable + Huge (2MB page) */
-    mov %eax, (%edi)
-
-    /* PD[1] -> 2MB huge page at 0x200000 (for kernel at 1MB) */
-    mov $0x200083, %eax             /* 2MB + Present + Writable + Huge */
-    mov %eax, 8(%edi)
+    mov $512, %ecx                  /* Loop counter - 512 entries for 1GB */
+    xor %eax, %eax                  /* Start at address 0 */
+1:  mov %eax, %ebx
+    or $0x83, %ebx                  /* Present + Writable + Huge */
+    mov %ebx, (%edi)
+    add $0x200000, %eax             /* Next 2MB */
+    add $8, %edi                    /* Next PD entry */
+    dec %ecx
+    jnz 1b
 
     ret
 
@@ -196,31 +199,41 @@ halt:
     hlt
     jmp halt
 
-/* ISR stub macro for interrupt handlers */
-.macro ISR_STUB num
+/* ISR stub macro for exceptions WITHOUT error code */
+.macro ISR_STUB_NO_ERR num
 .global isr_stub_\num
 isr_stub_\num:
+    /* Push dummy error code for consistency */
+    pushq $0
+
     /* Save all registers */
-    push %rax
-    push %rbx
-    push %rcx
-    push %rdx
-    push %rsi
-    push %rdi
-    push %rbp
-    push %r8
-    push %r9
-    push %r10
-    push %r11
-    push %r12
-    push %r13
-    push %r14
-    push %r15
+    pushq %rax
+    pushq %rbx
+    pushq %rcx
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %rbp
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
 
-    /* Pass interrupt number as first argument */
+    /* Load kernel data segments */
+    mov $0x10, %ax
+    mov %ax, %ds
+    mov %ax, %es
+
+    /* Pass interrupt number, error code, and RIP */
     mov $\num, %rdi
+    movq 120(%rsp), %rsi  /* Error code (pushed by us) */
+    movq 128(%rsp), %rdx  /* RIP (pushed by CPU) */
 
-    /* Call appropriate handler */
+    /* Call handler */
     .if \num < 32
         call exception_handler
     .else
@@ -228,23 +241,95 @@ isr_stub_\num:
     .endif
 
     /* Restore all registers */
-    pop %r15
-    pop %r14
-    pop %r13
-    pop %r12
-    pop %r11
-    pop %r10
-    pop %r9
-    pop %r8
-    pop %rbp
-    pop %rdi
-    pop %rsi
-    pop %rdx
-    pop %rcx
-    pop %rbx
-    pop %rax
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rbp
+    popq %rdi
+    popq %rsi
+    popq %rdx
+    popq %rcx
+    popq %rbx
+    popq %rax
+
+    /* Remove error code */
+    addq $8, %rsp
 
     iretq
+.endm
+
+/* ISR stub macro for exceptions WITH error code */
+.macro ISR_STUB_ERR num
+.global isr_stub_\num
+isr_stub_\num:
+    /* Error code already pushed by CPU */
+
+    /* Save all registers */
+    pushq %rax
+    pushq %rbx
+    pushq %rcx
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %rbp
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+
+    /* Load kernel data segments */
+    mov $0x10, %ax
+    mov %ax, %ds
+    mov %ax, %es
+
+    /* Pass interrupt number, error code, and RIP */
+    mov $\num, %rdi
+    movq 120(%rsp), %rsi  /* Error code (pushed by CPU) */
+    movq 128(%rsp), %rdx  /* RIP (pushed by CPU) */
+
+    /* Call handler */
+    call exception_handler
+
+    /* Restore all registers */
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rbp
+    popq %rdi
+    popq %rsi
+    popq %rdx
+    popq %rcx
+    popq %rbx
+    popq %rax
+
+    /* Remove error code */
+    addq $8, %rsp
+
+    iretq
+.endm
+
+/* Wrapper for backward compatibility */
+.macro ISR_STUB num
+    /* Exceptions that push error code: 8, 10, 11, 12, 13, 14, 17, 21, 29, 30 */
+    .if \num == 8 || \num == 10 || \num == 11 || \num == 12 || \num == 13 || \num == 14 || \num == 17 || \num == 21 || \num == 29 || \num == 30
+        ISR_STUB_ERR \num
+    .else
+        ISR_STUB_NO_ERR \num
+    .endif
 .endm
 
 /* Generate ISR stubs */

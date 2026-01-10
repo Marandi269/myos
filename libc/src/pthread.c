@@ -59,7 +59,7 @@ static inline long syscall6_impl(long num, long a1, long a2, long a3,
 /* Clone syscall */
 static long sys_clone(unsigned long flags, void *stack, int *parent_tid,
                       int *child_tid, void *tls) {
-    return syscall6_impl(SYS_CLONE, flags, (long)stack, (long)parent_tid,
+    return syscall6_impl(SYS_clone, flags, (long)stack, (long)parent_tid,
                     (long)child_tid, (long)tls, 0);
 }
 

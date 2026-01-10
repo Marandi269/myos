@@ -21,9 +21,15 @@ C_SRCS = src/string.c \
          src/mman.c \
          src/pipe.c \
          src/pthread.c \
-         src/select.c
+         src/select.c \
+         src/errno.c \
+         src/ctype.c \
+         src/time.c \
+         src/pwd.c \
+         src/grp.c \
+         src/fnmatch.c
 
-ASM_SRCS = src/crt0.S
+ASM_SRCS = src/crt0.S src/setjmp.S
 
 # Object files
 C_OBJS = $(C_SRCS:.c=.o)

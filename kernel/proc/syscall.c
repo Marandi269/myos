@@ -91,6 +91,8 @@ void syscall_init(void) {
     /* Register implemented syscalls */
     syscall_register(SYS_READ,   (syscall_fn_t)sys_read);
     syscall_register(SYS_WRITE,  (syscall_fn_t)sys_write);
+    syscall_register(SYS_READV,  (syscall_fn_t)sys_readv);
+    syscall_register(SYS_WRITEV, (syscall_fn_t)sys_writev);
     syscall_register(SYS_OPEN,   (syscall_fn_t)sys_open);
     syscall_register(SYS_CLOSE,  (syscall_fn_t)sys_close);
     syscall_register(SYS_LSEEK,  (syscall_fn_t)sys_lseek);
@@ -100,6 +102,7 @@ void syscall_init(void) {
     syscall_register(SYS_GETPID, (syscall_fn_t)sys_getpid);
     syscall_register(SYS_GETPPID,(syscall_fn_t)sys_getppid);
     syscall_register(SYS_EXIT,   (syscall_fn_t)sys_exit);
+    syscall_register(SYS_EXIT_GROUP, (syscall_fn_t)sys_exit_group);
     syscall_register(SYS_FORK,   (syscall_fn_t)sys_fork);
     syscall_register(SYS_EXECVE, (syscall_fn_t)sys_execve);
     syscall_register(SYS_WAIT4,  (syscall_fn_t)sys_wait4);
@@ -128,6 +131,50 @@ void syscall_init(void) {
     syscall_register(SYS_POLL,   (syscall_fn_t)sys_poll);
     syscall_register(SYS_SELECT, (syscall_fn_t)sys_select);
 
+    /* Phase 12: BusyBox compatibility syscalls */
+    syscall_register(SYS_STAT,    (syscall_fn_t)sys_stat);
+    syscall_register(SYS_FSTAT,   (syscall_fn_t)sys_fstat);
+    syscall_register(SYS_LSTAT,   (syscall_fn_t)sys_lstat);
+    syscall_register(SYS_ACCESS,  (syscall_fn_t)sys_access);
+    syscall_register(SYS_CHMOD,   (syscall_fn_t)sys_chmod);
+    syscall_register(SYS_FCHMOD,  (syscall_fn_t)sys_fchmod);
+    syscall_register(SYS_CHOWN,   (syscall_fn_t)sys_chown);
+    syscall_register(SYS_FCHOWN,  (syscall_fn_t)sys_fchown);
+    syscall_register(SYS_LINK,    (syscall_fn_t)sys_link);
+    syscall_register(SYS_UNLINK,  (syscall_fn_t)sys_unlink);
+    syscall_register(SYS_SYMLINK, (syscall_fn_t)sys_symlink);
+    syscall_register(SYS_READLINK,(syscall_fn_t)sys_readlink);
+    syscall_register(SYS_RENAME,  (syscall_fn_t)sys_rename);
+    syscall_register(SYS_RMDIR,   (syscall_fn_t)sys_rmdir);
+    syscall_register(SYS_UMASK,   (syscall_fn_t)sys_umask);
+    syscall_register(SYS_FTRUNCATE,(syscall_fn_t)sys_ftruncate);
+    syscall_register(SYS_FCNTL,   (syscall_fn_t)sys_fcntl);
+    syscall_register(SYS_IOCTL,   (syscall_fn_t)sys_ioctl_impl);
+
+    /* User/Group ID syscalls */
+    syscall_register(SYS_GETUID,  (syscall_fn_t)sys_getuid);
+    syscall_register(SYS_GETEUID, (syscall_fn_t)sys_geteuid);
+    syscall_register(SYS_GETGID,  (syscall_fn_t)sys_getgid);
+    syscall_register(SYS_GETEGID, (syscall_fn_t)sys_getegid);
+    syscall_register(SYS_SETUID,  (syscall_fn_t)sys_setuid);
+    syscall_register(SYS_SETGID,  (syscall_fn_t)sys_setgid);
+
+    /* System info syscalls */
+    syscall_register(SYS_UNAME,   (syscall_fn_t)sys_uname);
+
+    /* Time syscalls */
+    syscall_register(SYS_NANOSLEEP,    (syscall_fn_t)sys_nanosleep);
+    syscall_register(SYS_CLOCK_GETTIME,(syscall_fn_t)sys_clock_gettime);
+    syscall_register(SYS_GETTIMEOFDAY, (syscall_fn_t)sys_gettimeofday);
+
+    /* Resource limits */
+    syscall_register(SYS_GETRLIMIT,(syscall_fn_t)sys_getrlimit);
+    syscall_register(SYS_SETRLIMIT,(syscall_fn_t)sys_setrlimit);
+
+    /* Process times and session */
+    syscall_register(SYS_TIMES,   (syscall_fn_t)sys_times);
+    syscall_register(SYS_SETSID,  (syscall_fn_t)sys_setsid);
+
     /*
      * STAR MSR layout:
      * Bits 32-47: SYSCALL CS (kernel) - CS = this value, SS = this value + 8
@@ -149,6 +196,23 @@ void syscall_init(void) {
     /* Enable SYSCALL/SYSRET in EFER */
     efer = rdmsr(MSR_EFER);
     wrmsr(MSR_EFER, efer | EFER_SCE);
+
+    /* Initialize kernel syscall stack
+     * This is used by syscall_entry to switch from user to kernel stack.
+     * We allocate a small kernel stack for syscall handling.
+     */
+    {
+        extern uint64_t kernel_syscall_stack;
+        void *stack = pmm_alloc_page();
+        if (stack) {
+            pmm_alloc_page();  /* Second page for 8KB stack */
+            kernel_syscall_stack = (uint64_t)stack + 8192;  /* Point to top */
+            kprintf("[SYSCALL] Kernel syscall stack at 0x%lx\n",
+                    kernel_syscall_stack);
+        } else {
+            kprintf("[SYSCALL] WARNING: Failed to allocate syscall stack!\n");
+        }
+    }
 
     kprintf("[SYSCALL] Initialized with %d handlers\n", MAX_SYSCALL);
 }
@@ -182,6 +246,9 @@ uint64_t syscall_handler(uint64_t num, uint64_t arg1, uint64_t arg2,
         kprintf("[SYSCALL] Invalid syscall number: %d\n", (int)num);
         return -ENOSYS;
     }
+
+    /* Debug: show syscalls */
+    kprintf("[SYS] %d\n", (int)num);
 
     return syscall_table[num](arg1, arg2, arg3, arg4, arg5, 0);
 }
@@ -240,6 +307,110 @@ int64_t sys_write(int fd, const char *buf, size_t count) {
 
     ret = vfs_write(file, buf, count);
     return ret;
+}
+
+/*
+ * iovec structure for readv/writev
+ */
+struct iovec {
+    void *iov_base;     /* Starting address */
+    size_t iov_len;     /* Number of bytes to transfer */
+};
+
+/*
+ * sys_writev - Write data from multiple buffers
+ *
+ * ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
+ */
+int64_t sys_writev(int fd, const struct iovec *iov, int iovcnt) {
+    struct fd_table *table;
+    struct file *file;
+    ssize_t total = 0;
+    int i;
+
+    if (!iov || iovcnt < 0) {
+        return -EFAULT;
+    }
+
+    if (iovcnt == 0) {
+        return 0;
+    }
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    file = fd_get(table, fd);
+    if (!file) {
+        return -EBADF;
+    }
+
+    for (i = 0; i < iovcnt; i++) {
+        if (iov[i].iov_len > 0 && iov[i].iov_base) {
+            ssize_t ret = vfs_write(file, iov[i].iov_base, iov[i].iov_len);
+            if (ret < 0) {
+                if (total == 0) {
+                    return ret;
+                }
+                break;
+            }
+            total += ret;
+            if ((size_t)ret < iov[i].iov_len) {
+                break;  /* Short write */
+            }
+        }
+    }
+
+    return total;
+}
+
+/*
+ * sys_readv - Read data into multiple buffers
+ *
+ * ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
+ */
+int64_t sys_readv(int fd, const struct iovec *iov, int iovcnt) {
+    struct fd_table *table;
+    struct file *file;
+    ssize_t total = 0;
+    int i;
+
+    if (!iov || iovcnt < 0) {
+        return -EFAULT;
+    }
+
+    if (iovcnt == 0) {
+        return 0;
+    }
+
+    table = get_fd_table();
+    if (!table) {
+        return -EBADF;
+    }
+
+    file = fd_get(table, fd);
+    if (!file) {
+        return -EBADF;
+    }
+
+    for (i = 0; i < iovcnt; i++) {
+        if (iov[i].iov_len > 0 && iov[i].iov_base) {
+            ssize_t ret = vfs_read(file, iov[i].iov_base, iov[i].iov_len);
+            if (ret < 0) {
+                if (total == 0) {
+                    return ret;
+                }
+                break;
+            }
+            total += ret;
+            if ((size_t)ret < iov[i].iov_len) {
+                break;  /* Short read */
+            }
+        }
+    }
+
+    return total;
 }
 
 /*
@@ -337,6 +508,17 @@ int64_t sys_exit(int status) {
 
     /* Should never reach here */
     return 0;
+}
+
+/*
+ * sys_exit_group - Exit all threads in a process
+ *
+ * void exit_group(int status)
+ *
+ * For now, since we don't have threads, this is the same as exit.
+ */
+int64_t sys_exit_group(int status) {
+    return sys_exit(status);
 }
 
 /*

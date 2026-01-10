@@ -11,7 +11,7 @@
 #include "lib/string.h"
 
 /* Heap configuration */
-#define HEAP_INITIAL_PAGES  16          /* 64 KB initial heap */
+#define HEAP_INITIAL_PAGES  1024        /* 4 MB initial heap */
 #define HEAP_BLOCK_MAGIC    0xDEADBEEF
 
 /* Block header */

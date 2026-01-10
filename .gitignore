@@ -29,3 +29,5 @@ core.*
 *.bak
 *.orig
 myos.img
+busybox/
+*.img

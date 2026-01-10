@@ -10,7 +10,5 @@
 .global _binary_initramfs_cpio_end
 
 _binary_initramfs_cpio_start:
-#ifdef EMBED_INITRAMFS
     .incbin "initramfs.cpio"
-#endif
 _binary_initramfs_cpio_end:

@@ -227,4 +227,10 @@ int elf_validate(Elf64_Ehdr *ehdr);
 /* Execute an ELF file (load and start) */
 int elf_exec(const char *path, char *const argv[], char *const envp[]);
 
+/* Create a process from an ELF file */
+process_t *elf_create_process(const char *path);
+
+/* Create a process from an ELF file with arguments */
+process_t *elf_create_process_with_args(const char *path, int argc, char *argv[], char *envp[]);
+
 #endif /* _ELF_H */

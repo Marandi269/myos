@@ -24,6 +24,8 @@
 | 9 | 高级特性 | ✅ 完成 | SMP, pthread, TTY, USB, 动态链接 |
 | 10 | 磁盘启动 | ✅ 完成 | IDE/ext2, 持久化存储 |
 | 11 | I/O 多路复用 | ✅ 完成 | select/poll, wait_queue |
+| 12 | BusyBox 移植 | ⏸️ 暂停 | 依赖过多，后续完善 |
+| 13 | 物理机启动 | ✅ 完成 | AHCI/SATA, ACPI, USB启动脚本 |
 
 ---
 

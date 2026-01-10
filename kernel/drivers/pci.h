@@ -83,6 +83,12 @@ void pci_write32(uint8_t bus, uint8_t slot, uint8_t func, uint8_t offset, uint32
 /* Find device by vendor/device ID */
 pci_device_t *pci_find_device(uint16_t vendor_id, uint16_t device_id);
 
+/* Find device by class/subclass */
+pci_device_t *pci_find_class(uint8_t class_code, uint8_t subclass);
+
+/* Find device by class/subclass/prog_if */
+pci_device_t *pci_find_class_prog(uint8_t class_code, uint8_t subclass, uint8_t prog_if);
+
 /* Get device BAR address */
 uint32_t pci_get_bar(pci_device_t *dev, int bar_num);
 

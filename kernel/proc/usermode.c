@@ -224,7 +224,22 @@ static const uint8_t test_user_code[] = {
  * still needs to be accessible (via identity mapping or
  * high-half mapping) to execute the iretq instruction.
  */
-static void switch_and_jump_to_usermode(uint64_t pml4, uint64_t entry, uint64_t user_stack) {
+void switch_and_jump_to_usermode(uint64_t pml4, uint64_t entry, uint64_t user_stack) {
+    /* Enable FPU and SSE for user mode */
+    __asm__ volatile (
+        /* Clear CR0.EM (bit 2), set CR0.MP (bit 1) */
+        "mov %%cr0, %%rax\n"
+        "and $~0x4, %%rax\n"       /* Clear EM (no FPU emulation) */
+        "or $0x2, %%rax\n"         /* Set MP (monitor coprocessor) */
+        "mov %%rax, %%cr0\n"
+
+        /* Set CR4.OSFXSR (bit 9) and CR4.OSXMMEXCPT (bit 10) */
+        "mov %%cr4, %%rax\n"
+        "or $0x600, %%rax\n"       /* Enable SSE and SSE exceptions */
+        "mov %%rax, %%cr4\n"
+        : : : "rax"
+    );
+
     __asm__ volatile (
         /* Disable interrupts during transition */
         "cli\n"

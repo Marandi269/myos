@@ -8,6 +8,7 @@
 #include "process.h"
 #include "scheduler.h"
 #include "user_space.h"
+#include "usermode.h"
 #include "syscall.h"
 #include "../fs/vfs.h"
 #include "../fs/fd.h"
@@ -16,6 +17,35 @@
 #include "../mm/heap.h"
 #include "../lib/kprintf.h"
 #include "../lib/string.h"
+
+/* Forward declaration for switch_and_jump */
+extern void switch_and_jump_to_usermode(uint64_t pml4, uint64_t entry, uint64_t user_stack);
+
+/* External function to set TSS RSP0 */
+extern void tss_set_rsp0(uint64_t rsp0);
+
+/* User process wrapper - jumps to user mode */
+static void user_process_wrapper(void) {
+    process_t *proc = current_proc;
+
+    kprintf("[USER] Starting user process: %s (entry=0x%lx, stack=0x%lx)\n",
+            proc->name, proc->user_entry, proc->user_stack);
+
+    /* Set TSS RSP0 to this process's kernel stack
+     * This is where the CPU will switch to when an interrupt
+     * occurs while in user mode
+     */
+    tss_set_rsp0(proc->kernel_stack);
+
+    /* Switch address space and jump to user mode */
+    switch_and_jump_to_usermode((uint64_t)proc->page_table,
+                                 proc->user_entry,
+                                 proc->user_stack);
+
+    /* Never reached */
+    kprintf("[USER] ERROR: switch_and_jump_to_usermode returned!\n");
+    process_exit(-1);
+}
 
 /*
  * Validate ELF header
@@ -137,32 +167,27 @@ int elf_load_from_memory(process_t *proc, void *data, size_t size) {
             /* Clear the page */
             memset((void *)phys, 0, PAGE_SIZE);
 
-            /* Copy data if within file bounds */
-            if (addr >= vaddr && addr < vaddr + filesz) {
-                uint64_t copy_offset = addr - vaddr;
-                uint64_t copy_size = PAGE_SIZE;
+            /* Copy data from file to this page */
+            /* Calculate the range of virtual addresses this page covers */
+            uint64_t page_vstart = addr;
+            uint64_t page_vend = addr + PAGE_SIZE;
 
-                if (addr < vaddr) {
-                    copy_offset = 0;
-                    copy_size -= (vaddr - addr);
-                }
-                if (copy_offset + copy_size > filesz) {
-                    copy_size = filesz - copy_offset;
-                }
+            /* Calculate the range of file data for this segment */
+            uint64_t file_vstart = vaddr;
+            uint64_t file_vend = vaddr + filesz;
 
-                if (copy_size > 0) {
-                    memcpy((void *)phys + (vaddr & (PAGE_SIZE - 1)),
-                           (uint8_t *)data + offset + copy_offset,
-                           copy_size);
-                }
-            } else if (addr < vaddr && addr + PAGE_SIZE > vaddr) {
-                /* Page straddles segment start */
-                uint64_t copy_start = vaddr & (PAGE_SIZE - 1);
-                uint64_t copy_size = PAGE_SIZE - copy_start;
-                if (copy_size > filesz) copy_size = filesz;
+            /* Find the overlap between this page and the file data */
+            uint64_t copy_vstart = (page_vstart > file_vstart) ? page_vstart : file_vstart;
+            uint64_t copy_vend = (page_vend < file_vend) ? page_vend : file_vend;
 
-                memcpy((void *)(phys + copy_start),
-                       (uint8_t *)data + offset,
+            if (copy_vstart < copy_vend) {
+                /* There is data to copy */
+                uint64_t dest_offset = copy_vstart - page_vstart;  /* Offset within the page */
+                uint64_t src_offset = copy_vstart - vaddr;         /* Offset within segment data */
+                uint64_t copy_size = copy_vend - copy_vstart;
+
+                memcpy((void *)(phys + dest_offset),
+                       (uint8_t *)data + offset + src_offset,
                        copy_size);
             }
 
@@ -188,16 +213,11 @@ int elf_load_from_memory(process_t *proc, void *data, size_t size) {
         proc->brk = 0x1000000;  /* Minimum 16MB */
     }
 
-    /* Setup user stack */
-    if (setup_user_stack(proc) < 0) {
-        kprintf("[ELF] Failed to setup user stack\n");
-        return -ENOMEM;
-    }
-
+    /* Stack will be setup later with proper argc/argv */
     proc->is_user = 1;
 
-    kprintf("[ELF] Loaded successfully: entry=0x%lx, brk=0x%lx, stack=0x%lx\n",
-            proc->user_entry, proc->brk, proc->user_stack);
+    kprintf("[ELF] ELF loaded, entry=0x%lx, brk=0x%lx\n",
+            proc->user_entry, proc->brk);
 
     return 0;
 }
@@ -336,10 +356,11 @@ int elf_exec(const char *path, char *const argv[], char *const envp[]) {
 }
 
 /*
- * Create and start a user process from an ELF file
+ * Create and start a user process from an ELF file with arguments
  */
-process_t *elf_create_process(const char *path) {
+process_t *elf_create_process_with_args(const char *path, int argc, char *argv[], char *envp[]) {
     process_t *proc;
+    context_t *ctx;
     int ret;
 
     /* Allocate process */
@@ -348,7 +369,7 @@ process_t *elf_create_process(const char *path) {
         return NULL;
     }
 
-    /* Load ELF */
+    /* Load ELF - this loads the binary but doesn't set up stack yet */
     ret = elf_load(proc, path);
     if (ret < 0) {
         process_free(proc);
@@ -361,5 +382,44 @@ process_t *elf_create_process(const char *path) {
     if (slash) name = slash + 1;
     strncpy(proc->name, name, sizeof(proc->name) - 1);
 
+    /* Setup user stack with proper argc/argv */
+    if (setup_user_stack_with_args(proc, argc, argv, envp) < 0) {
+        kprintf("[ELF] Failed to setup user stack\n");
+        process_free(proc);
+        return NULL;
+    }
+    kprintf("[ELF] User stack pointer: 0x%lx\n", proc->user_stack);
+
+    /* Set up context to call user_process_wrapper when scheduled */
+    proc->kernel_stack -= sizeof(context_t);
+    ctx = (context_t *)proc->kernel_stack;
+    memset(ctx, 0, sizeof(context_t));
+    ctx->rip = (uint64_t)user_process_wrapper;
+    ctx->rbp = 0;
+    proc->context = ctx;
+
+    /* Create file descriptor table for the process */
+    proc->fd_table = fd_table_create();
+    if (proc->fd_table) {
+        /* Set up stdio */
+        struct file *console = vfs_open("/dev/console", O_RDWR, 0);
+        if (console) {
+            fd_alloc(proc->fd_table, console);  /* stdin = 0 */
+            fd_alloc(proc->fd_table, console);  /* stdout = 1 */
+            fd_alloc(proc->fd_table, console);  /* stderr = 2 */
+        }
+    }
+
     return proc;
+}
+
+/*
+ * Create and start a user process from an ELF file
+ * Uses the path as argv[0] with argc=1
+ */
+process_t *elf_create_process(const char *path) {
+    char *argv[2];
+    argv[0] = (char *)path;
+    argv[1] = NULL;
+    return elf_create_process_with_args(path, 1, argv, NULL);
 }

@@ -26,8 +26,13 @@
 #include "drivers/usb/usb.h"
 #include "drivers/usb/hid.h"
 #include "drivers/ide.h"
+#include "drivers/ahci.h"
+#include "drivers/acpi.h"
 #include "fs/ext2/ext2.h"
 #include "fs/pivot_root.h"
+#include "fs/initramfs.h"
+#include "fs/vfs.h"
+#include "proc/elf.h"
 #include "lib/string.h"
 
 /* Default memory size (128 MB) - will be detected from Multiboot later */
@@ -70,12 +75,11 @@ static const char *exception_names[] = {
 };
 
 /* Exception handler - called from assembly */
-void exception_handler(int num) {
+void exception_handler(int num, uint64_t error_code, uint64_t rip) {
     /* Special handling for page fault (exception 14) */
     if (num == 14) {
         /* Error code is pushed by CPU for page faults */
-        /* For now, just call with 0 - proper error code handling needs asm changes */
-        page_fault_handler(0);
+        page_fault_handler(error_code);
         return;
     }
 
@@ -86,6 +90,8 @@ void exception_handler(int num) {
         kprintf("Unknown (%d)", num);
     }
     kprintf(" !!!\n");
+    kprintf("  RIP: 0x%lx\n", rip);
+    kprintf("  Error code: 0x%lx\n", error_code);
 
     /* Halt the system */
     kprintf("System halted.\n");
@@ -409,8 +415,14 @@ void kernel_main(void) {
     /* Initialize USB subsystem (needs PCI) */
     usb_init();
 
+    /* Initialize ACPI (power management) */
+    acpi_init();
+
     /* Initialize IDE disk driver */
     ide_init();
+
+    /* Initialize AHCI (SATA) disk driver */
+    ahci_init();
 
     /* Test disk boot: mount ext2 and demonstrate root filesystem access */
     if (ide_device_count() > 0) {
@@ -478,23 +490,55 @@ void kernel_main(void) {
         kprintf("[USB] No USB keyboard found\n");
     }
 
-    /* Scheduler test (will not return once started) */
+    /* Load initramfs */
+    kprintf("\n[INIT] Loading initramfs...\n");
+    initramfs_init();
+
+    if (initramfs_available()) {
+        kprintf("[INIT] initramfs loaded successfully\n");
+
+        /* List /bin directory */
+        struct file *bin_dir = vfs_open("/bin", O_RDONLY, 0);
+        if (bin_dir) {
+            kprintf("[INIT] /bin contents:\n");
+            struct dirent dent;
+            while (vfs_readdir(bin_dir, &dent) == 0) {
+                kprintf("  %s\n", dent.d_name);
+            }
+            vfs_close(bin_dir);
+        }
+
+        /* Start our simple shell */
+        kprintf("\n[INIT] Starting /bin/sh...\n");
+        char *argv[] = { "/bin/sh", NULL };
+        process_t *shell = elf_create_process_with_args("/bin/sh", 1, argv, NULL);
+        if (shell) {
+            kprintf("[INIT] Shell process created (PID %d)\n", shell->pid);
+
+            /* Add process to scheduler ready queue */
+            extern void sched_ready(process_t *proc);
+            sched_ready(shell);
+
+            kprintf("[INIT] Starting scheduler...\n");
+            /* Start scheduler - this will switch to the shell process */
+            scheduler_start();
+        } else {
+            kprintf("[INIT] ERROR: Failed to create shell process\n");
+            kprintf("[INIT] Falling back to test mode...\n");
+        }
+    } else {
+        kprintf("[INIT] No initramfs available\n");
+    }
+
+    /* Fallback: Scheduler test */
+    kprintf("\n[Kernel] Running scheduler test...\n");
     test_scheduler();
 
     /* Print final stats */
     pmm_print_stats();
     heap_print_stats();
 
-    kprintf("\n[Kernel] Running user mode test...\n");
-
-    /* Test user mode (P-21)
-     * This will create a user process and jump to ring 3
-     * The user process will make syscalls and then exit
-     */
-    test_usermode();
-
-    /* If we get here, something went wrong or user process exited */
-    kprintf("\n[Kernel] Ready. Type something (USB keyboard):\n");
+    kprintf("\n[Kernel] Entering idle loop...\n");
 
     /* Main kernel loop - poll USB keyboard */
     usb_hid_keyboard_t *usb_kbd = usb_hid_get_keyboard();

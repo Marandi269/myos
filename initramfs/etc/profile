@@ -1,0 +1,7 @@
+# MyOS Shell Profile
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+export HOME=/root
+export PS1='myos# '
+export TERM=vt100
+
+echo "Welcome to MyOS!"

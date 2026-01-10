@@ -34,6 +34,14 @@ void free_user_address_space(uint64_t *pml4);
  */
 int setup_user_stack(process_t *proc);
 
+/* Setup user stack with arguments
+ * argc: argument count
+ * argv: argument vector (NULL-terminated array of strings)
+ * envp: environment vector (NULL-terminated array of strings, can be NULL)
+ * Returns: 0 on success, -1 on failure
+ */
+int setup_user_stack_with_args(process_t *proc, int argc, char *argv[], char *envp[]);
+
 /* Map a page in a specific page table
  * pml4: the page table to modify
  * vaddr: virtual address to map
