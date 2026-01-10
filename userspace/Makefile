@@ -20,9 +20,13 @@ BIN_DIR = ../initramfs/bin
 PROGRAMS = init sh echo cat ls pwd mkdir hello
 
 # Targets
-.PHONY: all clean libc
+.PHONY: all clean libc dirs
 
-all: libc $(PROGRAMS)
+all: dirs libc $(PROGRAMS)
+
+# Create output directory
+dirs:
+	@mkdir -p $(BIN_DIR)
 
 libc:
 	$(MAKE) -C $(LIBC_DIR)
